@@ -8,8 +8,7 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        // Keep Supabase Auth session so users stay logged in across refresh.
-        persistSession: true,
+        persistSession: false,
       },
     })
   : null;
