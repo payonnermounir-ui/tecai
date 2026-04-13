@@ -1286,22 +1286,27 @@ export default function App() {
     setAdminPass("");
   }
 
-  function logout() {
-    if (session?.role === "user" && isSupabaseConfigured && supabase) {
-      void supabase.auth.signOut();
+  async function logout() {
+  if (session?.role === "user" && isSupabaseConfigured && supabase) {
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // تجاهل أي خطأ من Supabase logout
     }
-    setSession(null);
-    // Clear local persisted session immediately so refresh cannot restore old login.
-    localStorage.setItem("tecai:session", JSON.stringify(null));
-    setRoute("home");
-    setMainTab("home");
-    setAuthMode("login");
-    setIntroOpen(false);
-    setShowSheet(false);
-    setReviewDialogOpen(false);
-    setProofPreviewUrl("");
-    resetWithdrawForm();
   }
+
+  setSession(null);
+  // Clear local persisted session immediately so refresh cannot restore old login.
+  localStorage.setItem("tecai:session", JSON.stringify(null));
+  setRoute("home");
+  setMainTab("home");
+  setAuthMode("login");
+  setIntroOpen(false);
+  setShowSheet(false);
+  setReviewDialogOpen(false);
+  setProofPreviewUrl("");
+  resetWithdrawForm();
+}
 
   useEffect(() => {
     // Prevent admin-only proof preview modal from leaking into user screens after role switch.
