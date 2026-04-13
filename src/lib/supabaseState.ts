@@ -52,7 +52,16 @@ async function safeSelect(table: string, columns = "*") {
 async function safeSelectOrdered(table: string, orderColumn: string) {
   if (!supabase) return { data: null, error: new Error("supabase_not_configured") };
 
-  const ordered = await supabase.from(table).select("*").order(orderColumn, { ascending: false });
+  const col = String(orderColumn ?? "").trim();
+  if (!col) {
+    return supabase.from(table).select("*");
+  }
+
+  const ordered = await supabase
+    .from(table)
+    .select("*")
+    .order(col, { ascending: false });
+
   if (!ordered.error) return ordered;
 
   return supabase.from(table).select("*");
