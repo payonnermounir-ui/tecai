@@ -670,7 +670,6 @@ const INTRO_CONTENT: Record<Lang, { title: string; lines: string[] }> = {
 const DEVICE_PAYOUT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 function getDeviceLifecycle(device: OwnedDevice, nowMs: number) {
-  // Keep lifecycle math stable even if a legacy row has a missing/invalid purchasedAt date.
   const parsedPurchasedAtMs = new Date(device.purchasedAt).getTime();
   const purchasedAtMs = Number.isFinite(parsedPurchasedAtMs) ? parsedPurchasedAtMs : nowMs;
   const validDays = Math.max(1, Number(device.validityDays || 0));
@@ -778,6 +777,118 @@ function isPdfProofUrl(value: string) {
   return lower.startsWith("data:application/pdf") || /\.pdf(\?|$)/.test(lower);
 }
 
+// ==================== دوال Supabase الجديدة ====================
+
+async function fetchUserDevices(phone: string): Promise<OwnedDevice[]> {
+  if (!supabase) return [];
+  
+  const { data, error } = await supabase
+    .from('devices')
+    .select('*')
+    .eq('phone', phone);
+    
+  if (error) {
+    console.error('Error fetching devices:', error);
+    return [];
+  }
+  
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    phone: row.phone,
+    planCode: row.plan_code,
+    planPrice: row.plan_price,
+    dailyIncome: row.daily_income,
+    totalIncome: row.total_income,
+    validityDays: row.validity_days,
+    image: row.image,
+    purchasedAt: row.purchased_at,
+    earnedAmount: row.earned_amount || 0,
+    hourlyRate: row.hourly_rate,
+    lastPayoutAt: row.last_payout_at,
+  }));
+}
+
+async function fetchUserBalance(phone: string): Promise<number> {
+  if (!supabase) return 0;
+  
+  const { data, error } = await supabase
+    .from('wallets')
+    .select('balance')
+    .eq('phone', phone)
+    .single();
+    
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching balance:', error);
+  }
+  
+  return data?.balance ?? 0;
+}
+
+async function updateUserBalance(phone: string, newBalance: number): Promise<boolean> {
+  if (!supabase) return false;
+  
+  const { data: existing } = await supabase
+    .from('wallets')
+    .select('phone')
+    .eq('phone', phone)
+    .single();
+    
+  if (existing) {
+    const { error } = await supabase
+      .from('wallets')
+      .update({ balance: newBalance })
+      .eq('phone', phone);
+    if (error) {
+      console.error('Error updating balance:', error);
+      return false;
+    }
+  } else {
+    const { error } = await supabase
+      .from('wallets')
+      .insert({ phone: phone, balance: newBalance });
+    if (error) {
+      console.error('Error inserting balance:', error);
+      return false;
+    }
+  }
+  return true;
+}
+
+async function saveDeviceToSupabase(device: OwnedDevice): Promise<boolean> {
+  if (!supabase) return false;
+  
+  const { error } = await supabase
+    .from('devices')
+    .insert({
+      id: device.id,
+      phone: device.phone,
+      plan_code: device.planCode,
+      plan_price: device.planPrice,
+      daily_income: device.dailyIncome,
+      total_income: device.totalIncome,
+      validity_days: device.validityDays,
+      image: device.image,
+      purchased_at: device.purchasedAt,
+      earned_amount: device.earnedAmount,
+      last_payout_at: device.lastPayoutAt,
+    });
+    
+  if (error) {
+    console.error('Error saving device:', error);
+    return false;
+  }
+  return true;
+}
+
+async function updateDeviceEarnings(deviceId: string, earnedAmount: number, lastPayoutAt: string): Promise<void> {
+  if (!supabase) return;
+  
+  await supabase
+    .from('devices')
+    .update({ earned_amount: earnedAmount, last_payout_at: lastPayoutAt })
+    .eq('id', deviceId);
+}
+
 export default function App() {
   const [lang, setLang] = useState<Lang>(() => loadJson<Lang>("tecai:lang", "ar"));
   const [session, setSession] = useState<Session>(() => loadJson<Session>("tecai:session", null));
@@ -850,7 +961,6 @@ export default function App() {
         }
 
         setLang(remoteState.lang ?? "ar");
-        // Session must stay device-local. Do not restore it from cloud state.
         setAccounts((remoteState.accounts as Record<string, UserAccount>) ?? {});
         setBalances(remoteState.balances ?? {});
         setTxs((remoteState.txs as Transaction[]) ?? []);
@@ -924,7 +1034,6 @@ export default function App() {
     saveTimeoutRef.current = window.setTimeout(() => {
       void saveSupabaseState({
         lang,
-        // Keep session out of cloud sync to avoid automatic re-login after refresh.
         session: null,
         accounts,
         balances,
@@ -948,6 +1057,27 @@ export default function App() {
     return () => window.clearInterval(id);
   }, []);
 
+  // تحميل البيانات من Supabase عند تسجيل الدخول
+  useEffect(() => {
+    if (session?.role === "user" && session.phone && supabase) {
+      fetchUserDevices(session.phone).then(remoteDevices => {
+        if (remoteDevices.length > 0) {
+          setDevices(prev => {
+            const existingIds = new Set(prev.map(d => d.id));
+            const newDevices = remoteDevices.filter(d => !existingIds.has(d.id));
+            return [...newDevices, ...prev];
+          });
+        }
+      });
+      
+      fetchUserBalance(session.phone).then(remoteBalance => {
+        if (remoteBalance > 0 || balances[session.phone] !== remoteBalance) {
+          setBalances(prev => ({ ...prev, [session.phone]: remoteBalance }));
+        }
+      });
+    }
+  }, [session]);
+
   useEffect(() => {
     function processDevicePayouts() {
       const now = Date.now();
@@ -970,9 +1100,11 @@ export default function App() {
           const payoutAmount = Number(Math.min(rawPayout, remaining).toFixed(4));
 
           if (payoutAmount <= 0) {
+            const newLastPayout = new Date(Math.min(effectiveNow, payoutBase + cycles * DEVICE_PAYOUT_INTERVAL_MS)).toISOString();
+            updateDeviceEarnings(device.id, earnedSoFar, newLastPayout);
             return {
               ...device,
-              lastPayoutAt: new Date(Math.min(effectiveNow, payoutBase + cycles * DEVICE_PAYOUT_INTERVAL_MS)).toISOString(),
+              lastPayoutAt: newLastPayout,
             };
           }
 
@@ -987,10 +1119,14 @@ export default function App() {
             });
           }
 
+          const newEarnedAmount = Number((earnedSoFar + payoutAmount).toFixed(4));
+          const newLastPayout = new Date(Math.min(effectiveNow, payoutBase + cycles * DEVICE_PAYOUT_INTERVAL_MS)).toISOString();
+          updateDeviceEarnings(device.id, newEarnedAmount, newLastPayout);
+
           return {
             ...device,
-            earnedAmount: Number((earnedSoFar + payoutAmount).toFixed(4)),
-            lastPayoutAt: new Date(Math.min(effectiveNow, payoutBase + cycles * DEVICE_PAYOUT_INTERVAL_MS)).toISOString(),
+            earnedAmount: newEarnedAmount,
+            lastPayoutAt: newLastPayout,
           };
         });
 
@@ -1004,12 +1140,14 @@ export default function App() {
         const next = { ...prev };
         for (const record of creditedRecords) {
           next[record.phone] = Number(((next[record.phone] ?? 0) + record.amount).toFixed(4));
+          updateUserBalance(record.phone, next[record.phone]);
 
           const inviterPhone = accountsRef.current[record.phone]?.referredBy;
           if (inviterPhone && inviterPhone !== record.phone) {
             const referralProfitBonus = Number((record.amount * REFERRAL_PROFIT_RATE).toFixed(4));
             if (referralProfitBonus > 0) {
               next[inviterPhone] = Number(((next[inviterPhone] ?? 0) + referralProfitBonus).toFixed(4));
+              updateUserBalance(inviterPhone, next[inviterPhone]);
               referralBonusTxs.push({
                 id: createUniqueId("tx_ref_profit"),
                 phone: inviterPhone,
@@ -1051,7 +1189,6 @@ export default function App() {
   }, [session]);
 
   useEffect(() => {
-    // Avoid leaking form values between different user sessions.
     resetWithdrawForm();
   }, [session?.phone]);
 
@@ -1194,7 +1331,6 @@ export default function App() {
           return;
         }
 
-        // Ensure a live session in projects where email confirmation is disabled.
         const signInRes = await supabase.auth.signInWithPassword({ email, password });
         if (signInRes.error) {
           setNotice(signInRes.error.message || t.badCredentials);
@@ -1234,7 +1370,6 @@ export default function App() {
       let signInRes = await supabase.auth.signInWithPassword({ email, password });
 
       if (signInRes.error && account?.loginPassword === password) {
-        // Migrate legacy profile users into Supabase Auth on first login.
         const signUpRes = await supabase.auth.signUp({
           email,
           password,
@@ -1287,7 +1422,6 @@ export default function App() {
       void supabase.auth.signOut();
     }
     setSession(null);
-    // Clear local persisted session immediately so refresh cannot restore old login.
     localStorage.setItem("tecai:session", JSON.stringify(null));
     setRoute("home");
     setMainTab("home");
@@ -1300,7 +1434,6 @@ export default function App() {
   }
 
   useEffect(() => {
-    // Prevent admin-only proof preview modal from leaking into user screens after role switch.
     if (session?.role !== "admin") {
       setProofPreviewUrl("");
     }
@@ -1489,6 +1622,7 @@ export default function App() {
         const before = prev[target.phone] ?? 0;
         const after = target.type === "deposit" ? before + target.amount : Math.max(0, before - target.amount);
         const nextBalances = { ...prev, [target.phone]: after };
+        updateUserBalance(target.phone, after);
 
         if (target.type === "deposit") {
           const inviterPhone = accounts[target.phone]?.referredBy;
@@ -1496,6 +1630,7 @@ export default function App() {
             const referralBonus = Number((target.amount * REFERRAL_DEPOSIT_RATE).toFixed(4));
             if (referralBonus > 0) {
               nextBalances[inviterPhone] = Number(((nextBalances[inviterPhone] ?? 0) + referralBonus).toFixed(4));
+              updateUserBalance(inviterPhone, nextBalances[inviterPhone]);
               referralBonusTxs.push({
                 id: createUniqueId("tx_ref_dep"),
                 phone: inviterPhone,
@@ -1546,13 +1681,20 @@ export default function App() {
       lastPayoutAt: new Date().toISOString(),
     };
 
-    setBalances((prev) => ({
-      ...prev,
-      [currentPhone]: Math.max(0, (prev[currentPhone] ?? 0) - plan.price),
-    }));
-    setDevices((prev) => [nextDevice, ...prev]);
-    setNotice(t.boughtSuccess);
-    setRoute("devices");
+    const newBalance = Math.max(0, balance - plan.price);
+    setBalances((prev) => ({ ...prev, [currentPhone]: newBalance }));
+    updateUserBalance(currentPhone, newBalance);
+    
+    saveDeviceToSupabase(nextDevice).then(success => {
+      if (success) {
+        setDevices((prev) => [nextDevice, ...prev]);
+        setNotice(t.boughtSuccess);
+        setRoute("devices");
+      } else {
+        setBalances((prev) => ({ ...prev, [currentPhone]: balance }));
+        setNotice("حدث خطأ في شراء الجهاز، حاول مرة أخرى");
+      }
+    });
   }
 
   if (!session) {
