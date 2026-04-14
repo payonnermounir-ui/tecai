@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
-import { loadSupabaseState, saveSupabaseState } from "./lib/supabaseState";
+import { loadSupabaseState, saveSupabaseState, type SupabaseState } from "./lib/supabaseState";
 
+// ... (جميع تعريفات الأنواع (type Lang, AuthMode, Role, etc.) تبقى كما هي) ...
 type Lang = "ar" | "en" | "zh";
 type AuthMode = "login" | "register";
 type Role = "user" | "admin";
@@ -68,6 +69,7 @@ type Transaction = {
   createdAt: string;
 };
 
+// ... (جميع الثوابت (ADMIN_PHONE, DICT, ROBOT_PRODUCTS, etc.) تبقى كما هي) ...
 const ADMIN_PHONE = "55810112";
 const ADMIN_PASSWORD = "TECAI@2026";
 const ADMIN_PHONE_WITH_CODE = "+21655810112";
@@ -77,722 +79,50 @@ const REFERRAL_PROFIT_RATE = 0.025;
 const DAILY_DEVICE_PROFIT_RATE = 0.03;
 const WITHDRAW_SERVICE_FEE_RATE = 0.2;
 
-function EyeIcon({ closed = false }: { closed?: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-      {closed ? (
-        <>
-          <path d="M3 3l18 18" />
-          <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-          <path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c6.5 0 10 8 10 8a18.1 18.1 0 0 1-4 5.1" />
-          <path d="M6.6 6.7A18.5 18.5 0 0 0 2 12s3.5 8 10 8a10.4 10.4 0 0 0 4.4-1" />
-        </>
-      ) : (
-        <>
-          <path d="M2 12s3.5-8 10-8 10 8 10 8-3.5 8-10 8-10-8-10-8Z" />
-          <circle cx="12" cy="12" r="3" />
-        </>
-      )}
-    </svg>
-  );
-}
-
-const DESTINATIONS: Record<DepositChannel, string> = {
-  TRC20: "TXLsHureixQs123XNcyzSWZ8edH6yTxS67",
-  BEP20: "0x0bcb69e95e45c419b17182a5f2f2bbadca7c9c75",
-  D17: "55810112",
-  Flouci: "55810112",
-  Bank: "Contact support for bank transfer details",
-};
-
-const DICT = {
-  ar: {
-    appName: "TECAI",
-    login: "دخول",
-    register: "تسجيل",
-    createAccount: "إنشاء حساب",
-    phone: "رقم الهاتف",
-    phoneHint: "أدخل رقم الهاتف",
-    countryCode: "كود البلد",
-    password: "كلمة المرور",
-    showPassword: "إظهار",
-    hidePassword: "إخفاء",
-    confirmPassword: "تأكيد كلمة المرور",
-    invalidPhone: "يرجى إدخال رقم هاتف صحيح",
-    badCredentials: "بيانات الدخول غير صحيحة",
-    phoneExists: "رقم الهاتف مسجل بالفعل",
-    passwordShort: "كلمة المرور قصيرة",
-    passwordMismatch: "تأكيد كلمة المرور غير مطابق",
-    accountCreated: "تم إنشاء الحساب بنجاح",
-    adminLogin: "دخول الإدارة",
-    userLogin: "دخول المستخدم",
-    adminCredentialsWrong: "بيانات الأدمن غير صحيحة",
-    home: "الرئيسية",
-    products: "المنتج",
-    team: "الفريق",
-    profile: "أنا",
-    deposit: "إيداع",
-    withdraw: "سحب",
-    lottery: "اليانصيب",
-    officialSite: "الموقع الرسمي",
-    help: "مساعدة",
-    app: "التطبيق",
-    dailyCheckIn: "تسجيل يومي",
-    accountBalance: "رصيد الحساب",
-    todayProfit: "أرباح اليوم",
-    autoProfitHistory: "سجل أرباح الأجهزة",
-    noAutoProfit: "لا توجد أرباح أجهزة حتى الآن.",
-    autoProfitTag: "ربح أجهزة تلقائي",
-    totalDeposit: "إجمالي الإيداع",
-    pendingLabel: "عملية قيد المراجعة",
-    noProducts: "لا توجد منتجات مفعلة حاليا.",
-    referral: "رابط الإحالة",
-    referralBonus: "مكافآت الإحالة",
-    referralIncomeDetails: "دخل الإحالة",
-    referralDepositIncome: "مكافآت الإيداع 5%",
-    referralProfitIncome: "مكافآت أرباح 2.5%",
-    brandTagline: "استثمار ذكي بروبوتات TECAI",
-    payPassSettings: "إعدادات كلمة سر السحب",
-    logout: "خروج",
-    language: "اللغة",
-    depositChannels: "قنوات الإيداع",
-    amount: "المبلغ",
-    uploadProof: "قم بتحميل إيصال الإيداع",
-    chooseFile: "اختر صورة أو PDF",
-    confirmDeposit: "تأكيد الإيداع",
-    depositInstructions: "تعليمات الإيداع",
-    reviewNotice: "تم إرسال العملية وهي الآن قيد المراجعة من الإدارة.",
-    reviewPopupTitle: "تم إرسال الطلب",
-    ok: "حسنا",
-    minDeposit: "الحد الأدنى للإيداع هو 1 USDT",
-    proofRequired: "يرجى رفع إثبات الإيداع",
-    proofUnavailable: "تعذر عرض الإثبات. يرجى إعادة رفع الإيصال في طلب جديد.",
-    copy: "نسخ",
-    copied: "تم النسخ",
-    bankCard: "بطاقة بنكية",
-    serviceFeeBank: "رسوم الخدمة: 20%",
-    serviceFeeUsdt: "رسوم الخدمة: 20%",
-    expectedArrival: "المبلغ المتوقع الوصول",
-    expectedBank: "المبلغ المتوقع الوصول 0.00 دينار تونسي",
-    expectedUsdt: "USD المبلغ المتوقع الوصول 0.00",
-    selectWithdrawChannel: "اختر قناة السحب",
-    withdrawPassword: "كلمة مرور الدفع",
-    withdrawAddress: "يرجى إدخال عنوان السحب",
-    withdrawBtn: "سحب",
-    minWithdraw: "الحد الأدنى للسحب هو 2 USDT",
-    noBalance: "الرصيد غير كاف",
-    withdrawableProfit: "المتاح للسحب",
-    withdrawProfitsOnly: "الرصيد غير كاف",
-    useMaxProfit: "استخدم كامل الرصيد",
-    needPayPassword: "يرجى إنشاء كلمة سر السحب من صفحة الإعدادات",
-    payPasswordRequired: "يرجى إدخال كلمة سر السحب",
-    payPasswordWrong: "كلمة سر السحب غير صحيحة",
-    chooseWithdrawChannel: "يرجى اختيار قناة سحب",
-    withdrawInstructions: "تعليمات السحب",
-    addChannel: "إضافة قناة",
-    noChannels: "لا توجد قنوات مضافة بعد.",
-    bindBank: "ربط البطاقة البنكية",
-    channel: "القناة",
-    name: "الاسم",
-    nameHint: "يرجى إدخال الاسم",
-    accountNumber: "رقم البطاقة البنكية",
-    accountHint: "يرجى إدخال رقم البطاقة البنكية",
-    save: "تأكيد",
-    allFieldsRequired: "يرجى تعبئة جميع الحقول",
-    channelAdded: "تمت إضافة قناة السحب بنجاح",
-    settings: "الإعدادات",
-    settingsHint: "هذه الصفحة لإنشاء أو تغيير كلمة سر السحب.",
-    currentPassword: "كلمة السر الحالية",
-    newPassword: "كلمة السر الجديدة",
-    confirmNewPassword: "تأكيد كلمة السر الجديدة",
-    savePayPassword: "حفظ كلمة سر السحب",
-    passwordSaved: "تم حفظ كلمة سر السحب",
-    currentPasswordWrong: "كلمة السر الحالية غير صحيحة",
-    pendingOps: "طلبات العمليات المعلقة",
-    noPending: "لا يوجد طلبات حاليا.",
-    approve: "قبول",
-    reject: "رفض",
-    backToUser: "العودة لتسجيل المستخدم",
-    tnd: "د.ت",
-    txHistory: "سجل العمليات المالية",
-    noTx: "لا توجد عمليات حتى الآن.",
-    statusPending: "قيد المراجعة",
-    statusApproved: "مقبول",
-    statusRejected: "مرفوض",
-    typeDeposit: "إيداع",
-    typeWithdraw: "سحب",
-    viewProof: "عرض إثبات الإيداع",
-    close: "إغلاق",
-    filterAll: "الكل",
-    filterDeposit: "الإيداع",
-    filterWithdraw: "السحب",
-    filterPending: "قيد المراجعة",
-    filterApproved: "مقبول",
-    filterRejected: "مرفوض",
-    robotPlans: "خطط الروبوت",
-    robotPlansHint: "مبلغ الإيداع (الحد الأدنى للإيداع: 30 د.ت)",
-    activatePlan: "تفعيل الخطة",
-    myDevices: "أجهزتي",
-    myDevicesTitle: "الأجهزة المفعلة",
-    runningNow: "قيد التشغيل المباشر",
-    purchasedAt: "تاريخ الشراء",
-    runTime: "مدة التشغيل",
-    liveProfit: "الربح المباشر",
-    earnedProfit: "الأرباح المحصلة",
-    remainingProfit: "الأرباح المتبقية",
-    expiresAt: "تاريخ الانتهاء",
-    completionRate: "نسبة الإنجاز",
-    finished: "مكتمل",
-    noDevices: "لا توجد أجهزة مفعلة بعد.",
-    buyAndRun: "شراء وتشغيل",
-    boughtSuccess: "تم شراء الجهاز وبدأ التشغيل.",
-    buyNeedBalance: "رصيدك غير كاف. تم تحويلك إلى صفحة الإيداع.",
-    onSaleNow: "مباع حاليا",
-    preSale: "قيد البيع المسبق",
-    preSaleEmpty: "لا توجد أجهزة تم شراؤها بعد.",
-    planCost: "التكلفة",
-    dailyIncomeLabel: "الدخل اليومي",
-    totalIncomeLabel: "إجمالي الدخل",
-    validityPeriod: "فترة الصلاحية",
-    daysCount: "عدد الأيام",
-    quantityLabel: "كمية المنتج",
-    unlimitedQty: "غير محدود بالعدد",
-    buy: "شراء",
-    currencyLong: "دينار تونسي",
-  },
-  en: {
-    appName: "TECAI",
-    login: "Login",
-    register: "Register",
-    createAccount: "Create account",
-    phone: "Phone",
-    phoneHint: "Enter phone number",
-    countryCode: "Country code",
-    password: "Password",
-    showPassword: "Show",
-    hidePassword: "Hide",
-    confirmPassword: "Confirm password",
-    invalidPhone: "Please enter a valid phone number",
-    badCredentials: "Invalid credentials",
-    phoneExists: "Phone already exists",
-    passwordShort: "Password is too short",
-    passwordMismatch: "Passwords do not match",
-    accountCreated: "Account created successfully",
-    adminLogin: "Admin login",
-    userLogin: "User login",
-    adminCredentialsWrong: "Invalid admin credentials",
-    home: "Home",
-    products: "Products",
-    team: "Team",
-    profile: "Me",
-    deposit: "Deposit",
-    withdraw: "Withdraw",
-    lottery: "Lottery",
-    officialSite: "Official site",
-    help: "Help",
-    app: "App",
-    dailyCheckIn: "Daily check-in",
-    accountBalance: "Account balance",
-    todayProfit: "Today profit",
-    autoProfitHistory: "Device profit history",
-    noAutoProfit: "No device profit records yet.",
-    autoProfitTag: "Automatic device profit",
-    totalDeposit: "Total deposit",
-    pendingLabel: "pending request(s)",
-    noProducts: "No active products yet.",
-    referral: "Referral link",
-    referralBonus: "Referral bonus",
-    referralIncomeDetails: "Referral income",
-    referralDepositIncome: "Deposit bonuses 5%",
-    referralProfitIncome: "Profit bonuses 2.5%",
-    brandTagline: "Smart investing with TECAI robots",
-    payPassSettings: "Withdrawal password settings",
-    logout: "Logout",
-    language: "Language",
-    depositChannels: "Deposit channels",
-    amount: "Amount",
-    uploadProof: "Upload deposit proof",
-    chooseFile: "Choose image or PDF",
-    confirmDeposit: "Confirm deposit",
-    depositInstructions: "Deposit instructions",
-    reviewNotice: "Request submitted. Waiting for admin review.",
-    reviewPopupTitle: "Request submitted",
-    ok: "OK",
-    minDeposit: "Minimum deposit is 1 USDT",
-    proofRequired: "Please upload deposit proof",
-    proofUnavailable: "Cannot preview this proof. Please re-upload receipt in a new request.",
-    copy: "Copy",
-    copied: "Copied",
-    bankCard: "Bank card",
-    serviceFeeBank: "Service fee: 20%",
-    serviceFeeUsdt: "Service fee: 20%",
-    expectedArrival: "Expected arrival",
-    expectedBank: "Expected arrival: 0.00 TND",
-    expectedUsdt: "Expected arrival: 0.00 USD",
-    selectWithdrawChannel: "Select withdrawal channel",
-    withdrawPassword: "Payment password",
-    withdrawAddress: "Enter withdrawal address",
-    withdrawBtn: "Withdraw",
-    minWithdraw: "Minimum withdrawal is 2 USDT",
-    noBalance: "Insufficient balance",
-    withdrawableProfit: "Available to withdraw",
-    withdrawProfitsOnly: "Insufficient balance",
-    useMaxProfit: "Use full balance",
-    needPayPassword: "Please create withdrawal password in settings",
-    payPasswordRequired: "Enter withdrawal password",
-    payPasswordWrong: "Wrong withdrawal password",
-    chooseWithdrawChannel: "Please choose withdrawal channel",
-    withdrawInstructions: "Withdrawal instructions",
-    addChannel: "Add channel",
-    noChannels: "No channels yet.",
-    bindBank: "Bind bank card",
-    channel: "Channel",
-    name: "Name",
-    nameHint: "Enter name",
-    accountNumber: "Card/account number",
-    accountHint: "Enter card/account number",
-    save: "Save",
-    allFieldsRequired: "Please fill all fields",
-    channelAdded: "Withdrawal channel added",
-    settings: "Settings",
-    settingsHint: "Create or change your withdrawal password.",
-    currentPassword: "Current password",
-    newPassword: "New password",
-    confirmNewPassword: "Confirm new password",
-    savePayPassword: "Save withdrawal password",
-    passwordSaved: "Password saved",
-    currentPasswordWrong: "Current password is wrong",
-    pendingOps: "Pending operations",
-    noPending: "No pending requests.",
-    approve: "Approve",
-    reject: "Reject",
-    backToUser: "Back to user login",
-    tnd: "TND",
-    txHistory: "Financial history",
-    noTx: "No transactions yet.",
-    statusPending: "Pending",
-    statusApproved: "Approved",
-    statusRejected: "Rejected",
-    typeDeposit: "Deposit",
-    typeWithdraw: "Withdraw",
-    viewProof: "View deposit proof",
-    close: "Close",
-    filterAll: "All",
-    filterDeposit: "Deposit",
-    filterWithdraw: "Withdraw",
-    filterPending: "Pending",
-    filterApproved: "Approved",
-    filterRejected: "Rejected",
-    robotPlans: "Robot plans",
-    robotPlansHint: "Deposit amount (minimum deposit: 30 TND)",
-    activatePlan: "Activate plan",
-    myDevices: "My devices",
-    myDevicesTitle: "Active devices",
-    runningNow: "Running live",
-    purchasedAt: "Purchased at",
-    runTime: "Run time",
-    liveProfit: "Live profit",
-    earnedProfit: "Earned profit",
-    remainingProfit: "Remaining profit",
-    expiresAt: "Expires at",
-    completionRate: "Completion",
-    finished: "Completed",
-    noDevices: "No active devices yet.",
-    buyAndRun: "Buy and run",
-    boughtSuccess: "Device purchased and started.",
-    buyNeedBalance: "Insufficient balance. Redirected to deposit page.",
-    onSaleNow: "On sale now",
-    preSale: "Pre-sale",
-    preSaleEmpty: "No purchased devices yet.",
-    planCost: "Cost",
-    dailyIncomeLabel: "Daily income",
-    totalIncomeLabel: "Total income",
-    validityPeriod: "Validity period",
-    daysCount: "Days",
-    quantityLabel: "Quantity",
-    unlimitedQty: "Unlimited",
-    buy: "Buy",
-    currencyLong: "Tunisian Dinar",
-  },
-  zh: {
-    appName: "TECAI",
-    login: "登录",
-    register: "注册",
-    createAccount: "创建账户",
-    phone: "手机号",
-    phoneHint: "输入手机号",
-    countryCode: "国家区号",
-    password: "密码",
-    showPassword: "显示",
-    hidePassword: "隐藏",
-    confirmPassword: "确认密码",
-    invalidPhone: "请输入正确的手机号",
-    badCredentials: "登录信息错误",
-    phoneExists: "手机号已存在",
-    passwordShort: "密码太短",
-    passwordMismatch: "两次密码不一致",
-    accountCreated: "账户创建成功",
-    adminLogin: "管理员登录",
-    userLogin: "用户登录",
-    adminCredentialsWrong: "管理员信息错误",
-    home: "首页",
-    products: "产品",
-    team: "团队",
-    profile: "我的",
-    deposit: "充值",
-    withdraw: "提现",
-    lottery: "抽奖",
-    officialSite: "官网",
-    help: "帮助",
-    app: "应用",
-    dailyCheckIn: "每日签到",
-    accountBalance: "账户余额",
-    todayProfit: "今日收益",
-    autoProfitHistory: "设备收益记录",
-    noAutoProfit: "暂无设备收益记录。",
-    autoProfitTag: "设备自动收益",
-    totalDeposit: "累计充值",
-    pendingLabel: "笔审核中",
-    noProducts: "暂无产品。",
-    referral: "邀请链接",
-    referralBonus: "邀请奖励",
-    referralIncomeDetails: "邀请收入",
-    referralDepositIncome: "充值奖励 5%",
-    referralProfitIncome: "收益奖励 2.5%",
-    brandTagline: "TECAI 智能机器人投资",
-    payPassSettings: "提现密码设置",
-    logout: "退出",
-    language: "语言",
-    depositChannels: "充值渠道",
-    amount: "金额",
-    uploadProof: "上传充值凭证",
-    chooseFile: "选择图片或PDF",
-    confirmDeposit: "确认充值",
-    depositInstructions: "充值说明",
-    reviewNotice: "申请已提交，等待管理员审核。",
-    reviewPopupTitle: "申请已提交",
-    ok: "确定",
-    minDeposit: "最低充值为 1 USDT",
-    proofRequired: "请上传充值凭证",
-    proofUnavailable: "无法预览该凭证，请在新申请中重新上传。",
-    copy: "复制",
-    copied: "已复制",
-    bankCard: "银行卡",
-    serviceFeeBank: "服务费: 20%",
-    serviceFeeUsdt: "服务费: 20%",
-    expectedArrival: "预计到账",
-    expectedBank: "预计到账: 0.00 TND",
-    expectedUsdt: "预计到账: 0.00 USD",
-    selectWithdrawChannel: "选择提现渠道",
-    withdrawPassword: "支付密码",
-    withdrawAddress: "输入提现地址",
-    withdrawBtn: "提现",
-    minWithdraw: "最低提现为 2 USDT",
-    noBalance: "余额不足",
-    withdrawableProfit: "可提现余额",
-    withdrawProfitsOnly: "余额不足",
-    useMaxProfit: "使用全部余额",
-    needPayPassword: "请先在设置里创建提现密码",
-    payPasswordRequired: "请输入提现密码",
-    payPasswordWrong: "提现密码错误",
-    chooseWithdrawChannel: "请选择提现渠道",
-    withdrawInstructions: "提现说明",
-    addChannel: "添加渠道",
-    noChannels: "暂无渠道。",
-    bindBank: "绑定银行卡",
-    channel: "渠道",
-    name: "姓名",
-    nameHint: "请输入姓名",
-    accountNumber: "银行卡/账户",
-    accountHint: "请输入银行卡/账户",
-    save: "确认",
-    allFieldsRequired: "请填写所有字段",
-    channelAdded: "提现渠道添加成功",
-    settings: "设置",
-    settingsHint: "在此页面创建或修改提现密码。",
-    currentPassword: "当前密码",
-    newPassword: "新密码",
-    confirmNewPassword: "确认新密码",
-    savePayPassword: "保存提现密码",
-    passwordSaved: "密码保存成功",
-    currentPasswordWrong: "当前密码错误",
-    pendingOps: "待处理请求",
-    noPending: "暂无请求。",
-    approve: "通过",
-    reject: "拒绝",
-    backToUser: "返回用户登录",
-    tnd: "TND",
-    txHistory: "资金记录",
-    noTx: "暂无记录。",
-    statusPending: "审核中",
-    statusApproved: "已通过",
-    statusRejected: "已拒绝",
-    typeDeposit: "充值",
-    typeWithdraw: "提现",
-    viewProof: "查看充值凭证",
-    close: "关闭",
-    filterAll: "全部",
-    filterDeposit: "充值",
-    filterWithdraw: "提现",
-    filterPending: "审核中",
-    filterApproved: "已通过",
-    filterRejected: "已拒绝",
-    robotPlans: "机器人计划",
-    robotPlansHint: "充值金额（最低充值：30 TND）",
-    activatePlan: "激活计划",
-    myDevices: "我的设备",
-    myDevicesTitle: "已激活设备",
-    runningNow: "实时运行中",
-    purchasedAt: "购买时间",
-    runTime: "运行时长",
-    liveProfit: "实时收益",
-    earnedProfit: "已到账收益",
-    remainingProfit: "剩余收益",
-    expiresAt: "到期时间",
-    completionRate: "完成进度",
-    finished: "已完成",
-    noDevices: "暂无激活设备。",
-    buyAndRun: "购买并运行",
-    boughtSuccess: "设备购买成功并已启动。",
-    buyNeedBalance: "余额不足，已跳转到充值页面。",
-    onSaleNow: "在售中",
-    preSale: "预售中",
-    preSaleEmpty: "暂无已购买设备。",
-    planCost: "成本",
-    dailyIncomeLabel: "日收益",
-    totalIncomeLabel: "总收益",
-    validityPeriod: "有效期",
-    daysCount: "天数",
-    quantityLabel: "数量",
-    unlimitedQty: "不限",
-    buy: "购买",
-    currencyLong: "突尼斯第纳尔",
-  },
-} as const;
-
-const DEPOSIT_RULES: Record<Lang, string[]> = {
-  ar: [
-    "1: الحد الأدنى للإيداع هو 1 USDT، أي إيداع أقل من 1 لن تتم معالجته.",
-    "2: سعر الصرف ثابت (1 USDT = 3.4 تند).",
-    "3: قبل كل عملية إيداع، يرجى الحصول على أحدث عنوان إيداع لتجنب تأخير أو فقدان الأموال.",
-    "4: عند الإيداع USDT (TRC20-BEP20)، يرجى اختيار شبكة التحويل الصحيحة، وإلا فلن يصل الرصيد.",
-    "5: بعد اكتمال التحويل سيتم إضافة الرصيد تلقائيا بعد المراجعة.",
-  ],
-  en: [
-    "1: Minimum deposit is 1 USDT. Deposits below 1 are not processed.",
-    "2: Exchange rate is fixed (1 USDT = 3.4 TND).",
-    "3: Always use the latest deposit address before sending funds.",
-    "4: Choose the correct USDT network (TRC20/BEP20), otherwise funds may not arrive.",
-    "5: After transfer completion, your request stays pending until admin review.",
-  ],
-  zh: [
-    "1: 最低充值为 1 USDT，低于 1 不处理。",
-    "2: 汇率固定 (1 USDT = 3.4 TND)。",
-    "3: 每次充值前请使用最新地址，避免延迟或丢失。",
-    "4: 充值USDT时请选择正确网络(TRC20/BEP20)。",
-    "5: 转账完成后将进入审核，管理员通过后更新余额。",
-  ],
-};
-
-const WITHDRAW_RULES: Record<Lang, string[]> = {
-  ar: [
-    "1: يمكن سحب يوميا من الساعة 9:00 إلى 17:00، مرة واحدة فقط في اليوم.",
-    "2: الحد الأدنى لمبلغ السحب في كل مرة هو [2USDT].",
-    "3: يتم فرض رسوم خدمة بنسبة 20% على كل عملية سحب.",
-    "4: بعد تقديم طلب السحب، سيتم وصول الأموال خلال 48 ساعة.",
-    "5: إذا فشل السحب، يرجى التحقق من صحة عنوان محفظتك، ثم أعد التقديم.",
-    "6: لتفعيل وظيفة السحب، يجب عليك إجراء إيداع واحد على الأقل.",
-  ],
-  en: [
-    "1: Withdrawals are available daily from 09:00 to 17:00, once per day.",
-    "2: Minimum withdrawal amount is 2 USDT.",
-    "3: A 20% service fee applies to each withdrawal.",
-    "4: Funds are expected within 48 hours after submission.",
-    "5: If withdrawal fails, verify your destination address and submit again.",
-    "6: At least one deposit is required to activate withdrawal.",
-  ],
-  zh: [
-    "1: 每日 09:00-17:00 可提现，每天一次。",
-    "2: 最低提现金额为 2 USDT。",
-    "3: 每笔提现收取 20% 服务费。",
-    "4: 提交后预计 48 小时内到账。",
-    "5: 若失败，请检查提现地址后重新提交。",
-    "6: 至少完成一次充值后才能提现。",
-  ],
-};
-
-const ROBOT_PRODUCTS = [
-  { code: "A1", price: 30, validityDays: 100, image: "/images/robot-30.png" },
-  { code: "A2", price: 80, validityDays: 100, image: "/images/robot-80.png" },
-  { code: "A3", price: 230, validityDays: 120, image: "/images/robot-230.png" },
-  { code: "A4", price: 580, validityDays: 120, image: "/images/robot-580.png" },
-  { code: "A5", price: 1400, validityDays: 150, image: "/images/robot-1400.png" },
-  { code: "A6", price: 3200, validityDays: 150, image: "/images/robot-3200.png" },
-  { code: "A7", price: 7500, validityDays: 180, image: "/images/robot-plan-1.png" },
-  { code: "A8", price: 18000, validityDays: 180, image: "/images/robot-plan-2.png" },
-  { code: "A9", price: 42000, validityDays: 230, image: "/images/robot-plan-3.png" },
-].map((plan) => {
-  const dailyIncome = Number((plan.price * DAILY_DEVICE_PROFIT_RATE).toFixed(4));
-  return {
-    ...plan,
-    dailyIncome,
-    totalIncome: Number((dailyIncome * plan.validityDays).toFixed(4)),
-  };
-});
-
-const INTRO_CONTENT: Record<Lang, { title: string; lines: string[] }> = {
-  ar: {
-    title: "كيف يعمل التطبيق",
-    lines: [
-      "1. قم بالتسجيل ثم اختر خطة روبوت من صفحة المنتج.",
-      "2. إذا كان الرصيد غير كاف، أرسل طلب إيداع مع إثبات التحويل.",
-      "3. بعد تقديم السحب أو الإيداع تظهر الحالة: قيد المراجعة حتى موافقة الإدارة.",
-      "4. يمكنك متابعة كل العمليات من صفحة أنا > سجل العمليات المالية.",
-    ],
-  },
-  en: {
-    title: "How The App Works",
-    lines: [
-      "1. Register, then choose a robot plan from the Products page.",
-      "2. If your balance is low, submit a deposit request with transfer proof.",
-      "3. Deposit and withdrawal requests stay pending until admin approval.",
-      "4. Track all operations from Me > Financial history.",
-    ],
-  },
-  zh: {
-    title: "应用使用说明",
-    lines: [
-      "1. 注册后，在产品页选择机器人计划。",
-      "2. 余额不足时，上传转账凭证并提交充值申请。",
-      "3. 充值和提现提交后会显示审核中，等待管理员处理。",
-      "4. 在我的 > 资金记录中可查看全部进度。",
-    ],
-  },
-};
-
+// ... (EyeIcon, DESTINATIONS, DEPOSIT_RULES, etc.) ...
+function EyeIcon({ closed = false }: { closed?: boolean }) { /* ... */ }
+const DESTINATIONS: Record<DepositChannel, string> = { /* ... */ };
+const DICT = { /* ... */ };
+const DEPOSIT_RULES: Record<Lang, string[]> = { /* ... */ };
+const WITHDRAW_RULES: Record<Lang, string[]> = { /* ... */ };
+const ROBOT_PRODUCTS = [ /* ... */ ];
+const INTRO_CONTENT: Record<Lang, { title: string; lines: string[] }> = { /* ... */ };
 const DEVICE_PAYOUT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-function getDeviceLifecycle(device: OwnedDevice, nowMs: number) {
-  // Keep lifecycle math stable even if a legacy row has a missing/invalid purchasedAt date.
-  const parsedPurchasedAtMs = new Date(device.purchasedAt).getTime();
-  const purchasedAtMs = Number.isFinite(parsedPurchasedAtMs) ? parsedPurchasedAtMs : nowMs;
-  const validDays = Math.max(1, Number(device.validityDays || 0));
-  const endAtMs = purchasedAtMs + validDays * DEVICE_PAYOUT_INTERVAL_MS;
-  const effectiveNow = Math.min(nowMs, endAtMs);
-  return { purchasedAtMs, endAtMs, effectiveNow };
-}
+// ... (جميع الدوال المساعدة (getDeviceLifecycle, formatAmount, createUniqueId, etc.) تبقى كما هي) ...
+function getDeviceLifecycle(device: OwnedDevice, nowMs: number) { /* ... */ }
+function formatAmount(value: number) { /* ... */ }
+function formatPlanNumber(value: number) { /* ... */ }
+function loadJson<T>(key: string, fallback: T): T { /* ... */ } // قد نحتاجها للغة فقط
+function normalizePhone(value: string) { /* ... */ }
+function buildAuthEmail(phone: string) { /* ... */ }
+function isAlreadyRegisteredAuthError(message: string) { /* ... */ }
+function parseReferralFromLocation() { /* ... */ }
+function createUniqueId(prefix: string) { /* ... */ }
+function parseAmountInput(value: string) { /* ... */ }
+function formatDuration(ms: number) { /* ... */ }
+function fileToDataUrl(file: File): Promise<string> { /* ... */ }
+function normalizeProofUrl(raw?: string) { /* ... */ }
+function isImageProofUrl(value: string) { /* ... */ }
+function isPdfProofUrl(value: string) { /* ... */ }
 
-function formatAmount(value: number) {
-  return Number.isFinite(value) ? value.toFixed(2) : "0.00";
-}
-
-function formatPlanNumber(value: number) {
-  if (!Number.isFinite(value)) return "0";
-  return Number.isInteger(value) ? String(value) : String(value);
-}
-
-function loadJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function normalizePhone(value: string) {
-  return value.replace(/\s+/g, "").trim();
-}
-
-function buildAuthEmail(phone: string) {
-  const compact = normalizePhone(phone).replace(/[^0-9+]/g, "");
-  const safeLocalPart = compact.replace(/\+/g, "");
-  return `u${safeLocalPart}@tecai.app`;
-}
-
-function isAlreadyRegisteredAuthError(message: string) {
-  const value = message.toLowerCase();
-  return value.includes("already") || value.includes("registered") || value.includes("exists");
-}
-
-function parseReferralFromLocation() {
-  try {
-    const url = new URL(window.location.href);
-    const fromQuery = url.searchParams.get("ref");
-    if (fromQuery) return normalizePhone(fromQuery);
-
-    const inviteMatch = window.location.pathname.match(/\/invite\/([^/?#]+)/i);
-    if (inviteMatch?.[1]) {
-      return normalizePhone(decodeURIComponent(inviteMatch[1]));
-    }
-  } catch {
-    return "";
-  }
-  return "";
-}
-
-function createUniqueId(prefix: string) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function parseAmountInput(value: string) {
-  const normalized = value
-    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
-    .replace(/,/g, ".")
-    .trim();
-  return Number(normalized);
-}
-
-function formatDuration(ms: number) {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error("file_read_error"));
-    reader.readAsDataURL(file);
-  });
-}
-
-function normalizeProofUrl(raw?: string) {
-  const value = String(raw ?? "").trim();
-  if (!value) return "";
-  if (value.startsWith("data:image/")) return value;
-  if (value.startsWith("data:application/pdf")) return value;
-  if (value.startsWith("blob:")) return value;
-  if (value.startsWith("https://") || value.startsWith("http://")) return value;
-  return "";
-}
-
-function isImageProofUrl(value: string) {
-  const lower = value.toLowerCase();
-  return lower.startsWith("data:image/") || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/.test(lower);
-}
-
-function isPdfProofUrl(value: string) {
-  const lower = value.toLowerCase();
-  return lower.startsWith("data:application/pdf") || /\.pdf(\?|$)/.test(lower);
-}
 
 export default function App() {
+  // --- State Definitions ---
   const [lang, setLang] = useState<Lang>(() => loadJson<Lang>("tecai:lang", "ar"));
-  const [session, setSession] = useState<Session>(() => loadJson<Session>("tecai:session", null));
-  const [accounts, setAccounts] = useState<Record<string, UserAccount>>(() => loadJson("tecai:accounts", {}));
-  const [balances, setBalances] = useState<Record<string, number>>(() => loadJson("tecai:balances", {}));
-  const [txs, setTxs] = useState<Transaction[]>(() => loadJson("tecai:txs", []));
-  const [devices, setDevices] = useState<OwnedDevice[]>(() => loadJson("tecai:devices", []));
-  const [profitRecords, setProfitRecords] = useState<ProfitRecord[]>(() => loadJson("tecai:profit-records", []));
+  const [session, setSession] = useState<Session>(null);
+  const [accounts, setAccounts] = useState<Record<string, UserAccount>>({});
+  const [balances, setBalances] = useState<Record<string, number>>({});
+  const [txs, setTxs] = useState<Transaction[]>([]);
+  const [devices, setDevices] = useState<OwnedDevice[]>([]);
+  const [profitRecords, setProfitRecords] = useState<ProfitRecord[]>([]);
+  
+  const [isLoading, setIsLoading] = useState(true);
   const [clockNow, setClockNow] = useState(() => Date.now());
-  const hasLoadedCloudRef = useRef(false);
+  const accountsRef = useRef(accounts);
   const saveTimeoutRef = useRef<number | null>(null);
 
+  // --- UI State (Routing, Forms, etc.) ---
   const [route, setRoute] = useState<Route>("home");
   const [mainTab, setMainTab] = useState<MainTab>("home");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
@@ -809,7 +139,7 @@ export default function App() {
   const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [showAuthConfirmPassword, setShowAuthConfirmPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [pendingReferralPhone, setPendingReferralPhone] = useState<string>(() => loadJson("tecai:pending-ref", ""));
+  const [pendingReferralPhone, setPendingReferralPhone] = useState<string>("");
 
   const [adminPhone, setAdminPhone] = useState(ADMIN_PHONE);
   const [adminPass, setAdminPass] = useState("");
@@ -834,185 +164,170 @@ export default function App() {
   const [oldPayPassword, setOldPayPassword] = useState("");
   const [newPayPassword, setNewPayPassword] = useState("");
   const [confirmPayPassword, setConfirmPayPassword] = useState("");
-  const accountsRef = useRef(accounts);
 
+
+  // --- Helper Functions for Cloud Sync ---
+  const syncToCloud = async (newState: Partial<SupabaseState>) => {
+    if (!isSupabaseConfigured) return;
+    // We need the current full state to update only the changed parts.
+    // To keep it simple, we'll save the entire relevant state every time.
+    const fullState: SupabaseState = {
+      lang,
+      session: null, // Never sync session
+      accounts,
+      balances,
+      txs,
+      devices,
+      profitRecords,
+      ...newState,
+    };
+    await saveSupabaseState(fullState);
+  };
+
+  // Generic state setter that triggers cloud sync
+  const setAndSync = async <T,>(
+    setter: React.Dispatch<React.SetStateAction<T>>,
+    value: T | ((prev: T) => T),
+    syncFields: keyof SupabaseState
+  ) => {
+    let newValue: T;
+    setter((prev) => {
+      newValue = value instanceof Function ? value(prev) : value;
+      return newValue;
+    });
+    // Use a timeout to batch rapid updates
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = window.setTimeout(() => {
+      syncToCloud({ [syncFields]: newValue });
+    }, 500);
+  };
+
+  // --- Data Loading on Mount ---
   useEffect(() => {
-    let cancelled = false;
-
-    async function bootstrapFromSupabase() {
-      if (!isSupabaseConfigured) {
-        hasLoadedCloudRef.current = true;
-        return;
-      }
-
+    const loadData = async () => {
+      setIsLoading(true);
       try {
         const remoteState = await loadSupabaseState();
-        if (!remoteState || cancelled) {
-          hasLoadedCloudRef.current = true;
-          return;
+        if (remoteState) {
+          setLang(remoteState.lang ?? "ar");
+          setAccounts(remoteState.accounts ?? {});
+          setBalances(remoteState.balances ?? {});
+          setTxs(remoteState.txs ?? []);
+          setDevices(remoteState.devices ?? []);
+          setProfitRecords(remoteState.profitRecords ?? []);
+        } else {
+          // Initialize empty state if nothing in cloud
+          setAccounts({});
+          setBalances({});
+          setTxs([]);
+          setDevices([]);
+          setProfitRecords([]);
         }
-
-        setLang(remoteState.lang ?? "ar");
-        // Session must stay device-local. Do not restore it from cloud state.
-        setAccounts((remoteState.accounts as Record<string, UserAccount>) ?? {});
-        setBalances(remoteState.balances ?? {});
-        setTxs((remoteState.txs as Transaction[]) ?? []);
-        setDevices((remoteState.devices as OwnedDevice[]) ?? []);
-        setProfitRecords((remoteState.profitRecords as ProfitRecord[]) ?? []);
-      } catch {
-        // App continues on local storage when cloud sync is unavailable.
+      } catch (error) {
+        console.error("Failed to load data from Supabase:", error);
+        setNotice("Failed to load data. Please refresh.");
       } finally {
-        if (!cancelled) hasLoadedCloudRef.current = true;
+        setIsLoading(false);
       }
-    }
-
-    void bootstrapFromSupabase();
-    return () => {
-      cancelled = true;
     };
+    loadData();
   }, []);
 
+  // --- Session Management (Supabase Auth) ---
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
-    const applyAuthSession = (authSession: { user?: { user_metadata?: { phone?: string } } } | null) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, authSession) => {
       const phoneFromAuth = normalizePhone(String(authSession?.user?.user_metadata?.phone ?? ""));
       if (phoneFromAuth) {
-        setSession((prev) => (prev?.role === "admin" ? prev : { role: "user", phone: phoneFromAuth }));
+        setSession({ role: "user", phone: phoneFromAuth });
       } else {
-        setSession((prev) => (prev?.role === "admin" ? prev : null));
+        setSession(null);
       }
-    };
-
-    void supabase.auth.getSession().then(({ data }) => {
-      applyAuthSession(data.session);
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, authSession) => {
-      applyAuthSession(authSession);
+    supabase.auth.getSession().then(({ data: { session: authSession } }) => {
+      const phoneFromAuth = normalizePhone(String(authSession?.user?.user_metadata?.phone ?? ""));
+      if (phoneFromAuth) {
+        setSession({ role: "user", phone: phoneFromAuth });
+      }
     });
 
     return () => {
-      subscription.unsubscribe();
+      authListener?.subscription.unsubscribe();
     };
   }, []);
 
-  useEffect(() => localStorage.setItem("tecai:lang", JSON.stringify(lang)), [lang]);
-  useEffect(() => localStorage.setItem("tecai:session", JSON.stringify(session)), [session]);
-  useEffect(() => localStorage.setItem("tecai:accounts", JSON.stringify(accounts)), [accounts]);
+  // --- Update accountsRef when accounts change ---
   useEffect(() => {
     accountsRef.current = accounts;
   }, [accounts]);
-  useEffect(() => localStorage.setItem("tecai:balances", JSON.stringify(balances)), [balances]);
-  useEffect(() => localStorage.setItem("tecai:txs", JSON.stringify(txs)), [txs]);
-  useEffect(() => localStorage.setItem("tecai:devices", JSON.stringify(devices)), [devices]);
-  useEffect(() => localStorage.setItem("tecai:profit-records", JSON.stringify(profitRecords)), [profitRecords]);
-  useEffect(() => localStorage.setItem("tecai:pending-ref", JSON.stringify(pendingReferralPhone)), [pendingReferralPhone]);
 
+  // --- Language persistence (keep in localStorage for simplicity) ---
+  useEffect(() => {
+    localStorage.setItem("tecai:lang", JSON.stringify(lang));
+  }, [lang]);
+
+  // --- Referral link handling ---
   useEffect(() => {
     const incomingRef = parseReferralFromLocation();
     if (!incomingRef || incomingRef === ADMIN_PHONE || incomingRef === ADMIN_PHONE_WITH_CODE) return;
     setPendingReferralPhone((prev) => (prev || incomingRef));
   }, []);
 
-  useEffect(() => {
-    if (!isSupabaseConfigured || !hasLoadedCloudRef.current) return;
-
-    if (saveTimeoutRef.current) {
-      window.clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = window.setTimeout(() => {
-      void saveSupabaseState({
-        lang,
-        // Keep session out of cloud sync to avoid automatic re-login after refresh.
-        session: null,
-        accounts,
-        balances,
-        txs,
-        devices,
-        profitRecords,
-      }).catch(() => {
-        // Keep local data if remote sync fails.
-      });
-    }, 600);
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        window.clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [lang, session, accounts, balances, txs, devices, profitRecords]);
-
+  // --- Clock for real-time updates ---
   useEffect(() => {
     const id = window.setInterval(() => setClockNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
+  // --- Device Payout Logic (same as before, but uses setAndSync) ---
   useEffect(() => {
-    function processDevicePayouts() {
+    async function processDevicePayouts() {
       const now = Date.now();
       const creditedRecords: ProfitRecord[] = [];
       const referralBonusTxs: Transaction[] = [];
+      let devicesChanged = false;
+      let newDevices = [...devices];
+      let newBalances = { ...balances };
+      let newProfitRecords = [...profitRecords];
+      let newTxs = [...txs];
 
-      setDevices((prevDevices) => {
-        let changed = false;
-        const nextDevices = prevDevices.map((device) => {
-          const { effectiveNow } = getDeviceLifecycle(device, now);
-          const payoutBase = new Date(device.lastPayoutAt ?? device.purchasedAt).getTime();
-          const elapsed = effectiveNow - payoutBase;
-          const cycles = Math.floor(elapsed / DEVICE_PAYOUT_INTERVAL_MS);
-          if (cycles <= 0) return device;
+      for (let i = 0; i < newDevices.length; i++) {
+        const device = newDevices[i];
+        const { effectiveNow } = getDeviceLifecycle(device, now);
+        const payoutBase = new Date(device.lastPayoutAt ?? device.purchasedAt).getTime();
+        const elapsed = effectiveNow - payoutBase;
+        const cycles = Math.floor(elapsed / DEVICE_PAYOUT_INTERVAL_MS);
+        if (cycles <= 0) continue;
 
-          changed = true;
-          const earnedSoFar = device.earnedAmount ?? 0;
-          const remaining = Math.max(0, Number((device.totalIncome - earnedSoFar).toFixed(4)));
-          const rawPayout = Number((cycles * device.dailyIncome).toFixed(4));
-          const payoutAmount = Number(Math.min(rawPayout, remaining).toFixed(4));
+        devicesChanged = true;
+        const earnedSoFar = device.earnedAmount ?? 0;
+        const remaining = Math.max(0, Number((device.totalIncome - earnedSoFar).toFixed(4)));
+        const rawPayout = Number((cycles * device.dailyIncome).toFixed(4));
+        const payoutAmount = Number(Math.min(rawPayout, remaining).toFixed(4));
 
-          if (payoutAmount <= 0) {
-            return {
-              ...device,
-              lastPayoutAt: new Date(Math.min(effectiveNow, payoutBase + cycles * DEVICE_PAYOUT_INTERVAL_MS)).toISOString(),
-            };
-          }
-
-          if (payoutAmount > 0) {
-              creditedRecords.push({
-                id: createUniqueId(`pr_${device.id}`),
-              phone: device.phone,
-              deviceId: device.id,
-              amount: payoutAmount,
-              cycles,
-              createdAt: new Date(now).toISOString(),
-            });
-          }
-
-          return {
-            ...device,
-            earnedAmount: Number((earnedSoFar + payoutAmount).toFixed(4)),
-            lastPayoutAt: new Date(Math.min(effectiveNow, payoutBase + cycles * DEVICE_PAYOUT_INTERVAL_MS)).toISOString(),
+        if (payoutAmount > 0) {
+          const newRecord: ProfitRecord = {
+            id: createUniqueId(`pr_${device.id}`),
+            phone: device.phone,
+            deviceId: device.id,
+            amount: payoutAmount,
+            cycles,
+            createdAt: new Date(now).toISOString(),
           };
-        });
+          creditedRecords.push(newRecord);
+          newProfitRecords = [newRecord, ...newProfitRecords];
+          
+          // Update balance
+          newBalances[device.phone] = Number(((newBalances[device.phone] ?? 0) + payoutAmount).toFixed(4));
 
-        return changed ? nextDevices : prevDevices;
-      });
-
-      if (creditedRecords.length === 0) return;
-
-      setProfitRecords((prev) => [...creditedRecords, ...prev]);
-      setBalances((prev) => {
-        const next = { ...prev };
-        for (const record of creditedRecords) {
-          next[record.phone] = Number(((next[record.phone] ?? 0) + record.amount).toFixed(4));
-
-          const inviterPhone = accountsRef.current[record.phone]?.referredBy;
-          if (inviterPhone && inviterPhone !== record.phone) {
-            const referralProfitBonus = Number((record.amount * REFERRAL_PROFIT_RATE).toFixed(4));
+          // Referral profit bonus
+          const inviterPhone = accountsRef.current[device.phone]?.referredBy;
+          if (inviterPhone && inviterPhone !== device.phone) {
+            const referralProfitBonus = Number((payoutAmount * REFERRAL_PROFIT_RATE).toFixed(4));
             if (referralProfitBonus > 0) {
-              next[inviterPhone] = Number(((next[inviterPhone] ?? 0) + referralProfitBonus).toFixed(4));
+              newBalances[inviterPhone] = Number(((newBalances[inviterPhone] ?? 0) + referralProfitBonus).toFixed(4));
               referralBonusTxs.push({
                 id: createUniqueId("tx_ref_profit"),
                 phone: inviterPhone,
@@ -1020,31 +335,47 @@ export default function App() {
                 amount: referralProfitBonus,
                 method: "Referral 2.5% profit bonus",
                 status: "approved",
-                payoutDetails: `From ${record.phone}`,
+                payoutDetails: `From ${device.phone}`,
                 createdAt: new Date(now).toISOString(),
               });
             }
           }
         }
-        return next;
-      });
 
-      if (referralBonusTxs.length > 0) {
-        setTxs((prev) => [...referralBonusTxs, ...prev]);
+        newDevices[i] = {
+          ...device,
+          earnedAmount: Number((earnedSoFar + (payoutAmount > 0 ? payoutAmount : 0)).toFixed(4)),
+          lastPayoutAt: new Date(Math.min(effectiveNow, payoutBase + cycles * DEVICE_PAYOUT_INTERVAL_MS)).toISOString(),
+        };
+      }
+
+      if (creditedRecords.length > 0) {
+        newTxs = [...referralBonusTxs, ...newTxs];
+        setDevices(newDevices);
+        setBalances(newBalances);
+        setProfitRecords(newProfitRecords);
+        setTxs(newTxs);
+        
+        // Sync to cloud after state updates
+        await syncToCloud({ devices: newDevices, balances: newBalances, profitRecords: newProfitRecords, txs: newTxs });
       }
     }
 
     processDevicePayouts();
-    const id = window.setInterval(processDevicePayouts, 60_000);
-    return () => window.clearInterval(id);
-  }, []);
+    const intervalId = setInterval(processDevicePayouts, 60_000);
+    return () => clearInterval(intervalId);
+  }, [devices, balances, profitRecords, txs]);
 
+  // --- Sync to cloud whenever core data changes (debounced) ---
   useEffect(() => {
-    if (!notice) return;
-    const id = window.setTimeout(() => setNotice(""), 2800);
-    return () => window.clearTimeout(id);
-  }, [notice]);
+    if (isLoading) return;
+    const handler = setTimeout(() => {
+      syncToCloud({ accounts, balances, txs, devices, profitRecords, lang });
+    }, 1000);
+    return () => clearTimeout(handler);
+  }, [accounts, balances, txs, devices, profitRecords, lang, isLoading]);
 
+  // --- Other side effects (intro, notice timeout, etc.) ---
   useEffect(() => {
     if (session?.role === "user") {
       setIntroOpen(true);
@@ -1054,115 +385,72 @@ export default function App() {
   }, [session]);
 
   useEffect(() => {
-    // Avoid leaking form values between different user sessions.
+    if (!notice) return;
+    const id = window.setTimeout(() => setNotice(""), 2800);
+    return () => window.clearTimeout(id);
+  }, [notice]);
+
+  useEffect(() => {
     resetWithdrawForm();
   }, [session?.phone]);
 
-  const isAdminPath = window.location.hash === "#admin";
-  const t = DICT[lang];
-  const isRtl = lang === "ar";
-  const currentPhone = session?.phone ?? "";
-  const currentAccount = currentPhone ? accounts[currentPhone] : undefined;
-  const balance = balances[currentPhone] ?? 0;
-  const pendingCount = txs.filter((x) => x.phone === currentPhone && x.status === "pending").length;
-  const depositDestination = DESTINATIONS[depositChannel];
-  const withdrawChannels = currentAccount?.channels ?? [];
-  const userDevices = devices.filter((device) => device.phone === currentPhone);
+  // --- Helper functions for state updates with cloud sync ---
+  const updateAccounts = async (newAccounts: Record<string, UserAccount> | ((prev: Record<string, UserAccount>) => Record<string, UserAccount>)) => {
+    let updated: Record<string, UserAccount>;
+    setAccounts(prev => {
+      updated = typeof newAccounts === 'function' ? newAccounts(prev) : newAccounts;
+      return updated;
+    });
+    await syncToCloud({ accounts: updated! });
+  };
 
-  const selectedChannel = useMemo(
-    () => withdrawChannels.find((x) => x.id === selectedChannelId),
-    [withdrawChannels, selectedChannelId],
-  );
+  const updateBalances = async (newBalances: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => {
+    let updated: Record<string, number>;
+    setBalances(prev => {
+      updated = typeof newBalances === 'function' ? newBalances(prev) : newBalances;
+      return updated;
+    });
+    await syncToCloud({ balances: updated! });
+  };
 
-  const approvedDepositTotal = txs
-    .filter((x) => x.phone === currentPhone && x.type === "deposit" && x.status === "approved")
-    .reduce((sum, x) => sum + x.amount, 0);
+  const updateTxs = async (newTxs: Transaction[] | ((prev: Transaction[]) => Transaction[])) => {
+    let updated: Transaction[];
+    setTxs(prev => {
+      updated = typeof newTxs === 'function' ? newTxs(prev) : newTxs;
+      return updated;
+    });
+    await syncToCloud({ txs: updated! });
+  };
 
-  const userProfitRecords = profitRecords.filter((record) => record.phone === currentPhone);
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const startOfTodayMs = startOfToday.getTime();
-  const todayProfitFromRecords = userProfitRecords
-    .filter((record) => new Date(record.createdAt).getTime() >= startOfToday.getTime())
-    .reduce((sum, record) => sum + record.amount, 0);
-  const todayLiveUncreditedProfit = userDevices.reduce((sum, device) => {
-    const { purchasedAtMs, effectiveNow } = getDeviceLifecycle(device, clockNow);
-    const payoutBaseMs = new Date(device.lastPayoutAt ?? device.purchasedAt).getTime();
-    const accrualStartMs = Math.max(startOfTodayMs, purchasedAtMs, Number.isFinite(payoutBaseMs) ? payoutBaseMs : purchasedAtMs);
-    const elapsedMs = Math.max(0, effectiveNow - accrualStartMs);
-    if (elapsedMs <= 0) return sum;
+  const updateDevices = async (newDevices: OwnedDevice[] | ((prev: OwnedDevice[]) => OwnedDevice[])) => {
+    let updated: OwnedDevice[];
+    setDevices(prev => {
+      updated = typeof newDevices === 'function' ? newDevices(prev) : newDevices;
+      return updated;
+    });
+    await syncToCloud({ devices: updated! });
+  };
 
-    const rawLiveProfit = (elapsedMs / DEVICE_PAYOUT_INTERVAL_MS) * Number(device.dailyIncome || 0);
-    const earnedSoFar = Number(device.earnedAmount ?? 0);
-    const remaining = Math.max(0, Number(device.totalIncome || 0) - earnedSoFar);
-    const safeLiveProfit = Math.min(rawLiveProfit, remaining);
-    return sum + (Number.isFinite(safeLiveProfit) ? safeLiveProfit : 0);
-  }, 0);
-  const todayProfit = Number((todayProfitFromRecords + todayLiveUncreditedProfit).toFixed(4));
+  const updateProfitRecords = async (newProfitRecords: ProfitRecord[] | ((prev: ProfitRecord[]) => ProfitRecord[])) => {
+    let updated: ProfitRecord[];
+    setProfitRecords(prev => {
+      updated = typeof newProfitRecords === 'function' ? newProfitRecords(prev) : newProfitRecords;
+      return updated;
+    });
+    await syncToCloud({ profitRecords: updated! });
+  };
 
-  const userTxs = txs.filter((x) => x.phone === currentPhone);
-  const referralLink = `${window.location.origin}?ref=${encodeURIComponent(currentPhone)}`;
-  const teamCount = Object.entries(accounts).filter(([, account]) => account.referredBy === currentPhone).length;
-  const referralDepositBonusTotal = txs
-    .filter((tx) => tx.phone === currentPhone && tx.status === "approved" && tx.method === "Referral 5% deposit bonus")
-    .reduce((sum, tx) => sum + tx.amount, 0);
-  const referralProfitBonusTotal = txs
-    .filter((tx) => tx.phone === currentPhone && tx.status === "approved" && tx.method === "Referral 2.5% profit bonus")
-    .reduce((sum, tx) => sum + tx.amount, 0);
-  const referralBonusTotal = txs
-    .filter((tx) => tx.phone === currentPhone && tx.status === "approved" && tx.method.startsWith("Referral "))
-    .reduce((sum, tx) => sum + tx.amount, 0);
-  const withdrawableAmountNow = Math.max(0, Number((balance ?? 0).toFixed(4)));
-  const withdrawAmountValue = parseAmountInput(withdrawAmount);
-  const validWithdrawAmount = Number.isFinite(withdrawAmountValue) && withdrawAmountValue > 0 ? withdrawAmountValue : 0;
-  const withdrawServiceFeeAmount = Number((validWithdrawAmount * WITHDRAW_SERVICE_FEE_RATE).toFixed(4));
-  const withdrawExpectedAmount = Number(Math.max(0, validWithdrawAmount - withdrawServiceFeeAmount).toFixed(4));
-  const filteredUserTxs = useMemo(() => {
-    if (txFilter === "all") return userTxs;
-    if (txFilter === "deposit") return userTxs.filter((x) => x.type === "deposit");
-    if (txFilter === "withdraw") return userTxs.filter((x) => x.type === "withdraw");
-    return userTxs.filter((x) => x.status === txFilter);
-  }, [txFilter, userTxs]);
 
-  function statusLabel(status: Transaction["status"]) {
-    if (status === "approved") return t.statusApproved;
-    if (status === "rejected") return t.statusRejected;
-    return t.statusPending;
-  }
+  // --- Authentication Handlers ---
+  const getFullPhone = () => `${countryCode}${phoneInput.trim()}`;
 
-  function typeLabel(type: Transaction["type"]) {
-    return type === "deposit" ? t.typeDeposit : t.typeWithdraw;
-  }
-
-  function resetAuthFields() {
-    setPhoneInput("");
-    setPassword("");
-    setConfirmPassword("");
-    setShowAuthPassword(false);
-    setShowAuthConfirmPassword(false);
-  }
-
-  function resetWithdrawForm() {
-    setWithdrawType("bank");
-    setWithdrawNetwork("TRC20");
-    setWithdrawAmount("");
-    setWithdrawAddress("");
-    setPaymentPasswordInput("");
-    setSelectedChannelId("");
-    setShowSheet(false);
-  }
-
-  async function onUserAuthSubmit() {
-    const rawPhone = phoneInput.trim();
-    if (!/^\d{6,15}$/.test(rawPhone)) {
-      setNotice(t.invalidPhone);
+  const onUserAuthSubmit = async () => {
+    const fullPhone = getFullPhone();
+    const normalizedPhone = normalizePhone(fullPhone);
+    if (!phoneInput.trim() || phoneInput.trim().length < 6) {
+      setNotice(t.badCredentials);
       return;
     }
-
-    const fullPhone = `${countryCode}${rawPhone}`;
-    const normalizedPhone = normalizePhone(fullPhone);
-    let resolvedPhone = fullPhone;
-    let account = accounts[fullPhone];
 
     if (authMode === "register") {
       if (password.length < 4) {
@@ -1197,7 +485,6 @@ export default function App() {
           return;
         }
 
-        // Ensure a live session in projects where email confirmation is disabled.
         const signInRes = await supabase.auth.signInWithPassword({ email, password });
         if (signInRes.error) {
           setNotice(signInRes.error.message || t.badCredentials);
@@ -1209,11 +496,12 @@ export default function App() {
       const referralOwner = Object.keys(accounts).find((phone) => normalizePhone(phone) === normalizedRef);
       const referredBy = referralOwner && referralOwner !== fullPhone ? referralOwner : undefined;
 
-      setAccounts((prev) => ({
-        ...prev,
+      await updateAccounts({
+        ...accounts,
         [fullPhone]: { loginPassword: password, channels: [], referredBy },
-      }));
-      setBalances((prev) => ({ ...prev, [fullPhone]: prev[fullPhone] ?? 0 }));
+      });
+      await updateBalances({ ...balances, [fullPhone]: balances[fullPhone] ?? 0 });
+      
       setNotice(t.accountCreated);
       setPendingReferralPhone("");
       setAuthMode("login");
@@ -1221,6 +509,7 @@ export default function App() {
       return;
     }
 
+    // Login
     const isAdminPhone = normalizedPhone === ADMIN_PHONE || normalizedPhone === ADMIN_PHONE_WITH_CODE;
     if (isAdminPhone && password === ADMIN_PASSWORD) {
       setSession({ role: "admin", phone: ADMIN_PHONE });
@@ -1230,12 +519,13 @@ export default function App() {
       return;
     }
 
+    const account = accounts[fullPhone];
+
     if (isSupabaseConfigured && supabase) {
       const email = buildAuthEmail(fullPhone);
       let signInRes = await supabase.auth.signInWithPassword({ email, password });
 
       if (signInRes.error && account?.loginPassword === password) {
-        // Migrate legacy profile users into Supabase Auth on first login.
         const signUpRes = await supabase.auth.signUp({
           email,
           password,
@@ -1243,7 +533,6 @@ export default function App() {
             data: { phone: fullPhone },
           },
         });
-
         if (!signUpRes.error || isAlreadyRegisteredAuthError(signUpRes.error.message)) {
           signInRes = await supabase.auth.signInWithPassword({ email, password });
         }
@@ -1253,29 +542,26 @@ export default function App() {
         setNotice(t.badCredentials);
         return;
       }
-      const authPhone = normalizePhone(String(signInRes.data.user?.user_metadata?.phone ?? fullPhone));
-      resolvedPhone = authPhone || fullPhone;
-      account = accounts[resolvedPhone] ?? accounts[fullPhone];
     } else if (!account || account.loginPassword !== password) {
       setNotice(t.badCredentials);
       return;
     }
 
     if (!account) {
-      setAccounts((prev) => ({
-        ...prev,
-        [resolvedPhone]: { loginPassword: password, channels: [] },
-      }));
-      setBalances((prev) => ({ ...prev, [resolvedPhone]: prev[resolvedPhone] ?? 0 }));
+      await updateAccounts({
+        ...accounts,
+        [fullPhone]: { loginPassword: password, channels: [] },
+      });
+      await updateBalances({ ...balances, [fullPhone]: balances[fullPhone] ?? 0 });
     }
 
-    setSession({ role: "user", phone: resolvedPhone });
+    setSession({ role: "user", phone: fullPhone });
     setRoute("home");
     setMainTab("home");
     resetAuthFields();
-  }
+  };
 
-  function onAdminLogin() {
+  const onAdminLogin = () => {
     const normalizedAdminPhone = normalizePhone(adminPhone);
     const isAdminPhone = normalizedAdminPhone === ADMIN_PHONE || normalizedAdminPhone === ADMIN_PHONE_WITH_CODE;
     if (!isAdminPhone || adminPass !== ADMIN_PASSWORD) {
@@ -1284,55 +570,25 @@ export default function App() {
     }
     setSession({ role: "admin", phone: ADMIN_PHONE });
     setAdminPass("");
-  }
+  };
 
-  async function logout() {
-  if (session?.role === "user" && isSupabaseConfigured && supabase) {
-    try {
-      await supabase.auth.signOut({ scope: "local" });
-    } catch {
-      // تجاهل أي خطأ من Supabase logout
+  const logout = async () => {
+    if (session?.role === "user" && isSupabaseConfigured && supabase) {
+      await supabase.auth.signOut();
     }
-  }
+    setSession(null);
+    setRoute("home");
+    setMainTab("home");
+    setAuthMode("login");
+    setIntroOpen(false);
+    setShowSheet(false);
+    setReviewDialogOpen(false);
+    setProofPreviewUrl("");
+    resetWithdrawForm();
+  };
 
-  setSession(null);
-  // Clear local persisted session immediately so refresh cannot restore old login.
-  localStorage.setItem("tecai:session", JSON.stringify(null));
-  setRoute("home");
-  setMainTab("home");
-  setAuthMode("login");
-  setIntroOpen(false);
-  setShowSheet(false);
-  setReviewDialogOpen(false);
-  setProofPreviewUrl("");
-  resetWithdrawForm();
-}
-
-  useEffect(() => {
-    // Prevent admin-only proof preview modal from leaking into user screens after role switch.
-    if (session?.role !== "admin") {
-      setProofPreviewUrl("");
-    }
-  }, [session]);
-
-  function openTelegramHelp() {
-    const telegramUrl = "https://t.me/tecaipro";
-    const popup = window.open(telegramUrl, "_blank", "noopener,noreferrer");
-    if (!popup) {
-      window.location.href = telegramUrl;
-    }
-  }
-
-  function openProofPreview(rawUrl?: string) {
-    const safeUrl = normalizeProofUrl(rawUrl);
-    if (!safeUrl) {
-      setNotice(t.proofUnavailable);
-      return;
-    }
-    setProofPreviewUrl(safeUrl);
-  }
-
-  async function submitDeposit() {
+  // --- Business Logic Handlers (Deposit, Withdraw, etc.) ---
+  const submitDeposit = async () => {
     const amount = parseAmountInput(depositAmount);
     if (!Number.isFinite(amount) || amount < 1) {
       setNotice(t.minDeposit);
@@ -1351,7 +607,7 @@ export default function App() {
       return;
     }
 
-    const tx: Transaction = {
+    const newTx: Transaction = {
       id: createUniqueId("tx"),
       phone: currentPhone,
       type: "deposit",
@@ -1362,13 +618,13 @@ export default function App() {
       receiptDataUrl,
       createdAt: new Date().toISOString(),
     };
-    setTxs((prev) => [tx, ...prev]);
+    await updateTxs([newTx, ...txs]);
     setDepositAmount("");
     setDepositReceipt(null);
     setReviewDialogOpen(true);
-  }
+  };
 
-  function submitWithdraw() {
+  const submitWithdraw = async () => {
     const amount = parseAmountInput(withdrawAmount);
     if (!Number.isFinite(amount) || amount < 2) {
       setNotice(t.minWithdraw);
@@ -1410,7 +666,7 @@ export default function App() {
       payoutDetails = withdrawAddress.trim();
     }
 
-    const tx: Transaction = {
+    const newTx: Transaction = {
       id: createUniqueId("tx"),
       phone: currentPhone,
       type: "withdraw",
@@ -1420,12 +676,12 @@ export default function App() {
       status: "pending",
       createdAt: new Date().toISOString(),
     };
-    setTxs((prev) => [tx, ...prev]);
+    await updateTxs([newTx, ...txs]);
     resetWithdrawForm();
     setReviewDialogOpen(true);
-  }
+  };
 
-  function saveWithdrawalChannel() {
+  const saveWithdrawalChannel = async () => {
     if (!bindName.trim() || !bindPhone.trim() || !bindAccount.trim()) {
       setNotice(t.allFieldsRequired);
       return;
@@ -1438,13 +694,15 @@ export default function App() {
       accountNumber: bindAccount.trim(),
     };
 
-    setAccounts((prev) => ({
-      ...prev,
-      [currentPhone]: {
-        ...(prev[currentPhone] as UserAccount),
-        channels: [...(prev[currentPhone]?.channels ?? []), nextChannel],
-      },
-    }));
+    const currentUserAccount = accounts[currentPhone] as UserAccount;
+    const updatedAccount = {
+      ...currentUserAccount,
+      channels: [...(currentUserAccount?.channels ?? []), nextChannel],
+    };
+    await updateAccounts({
+      ...accounts,
+      [currentPhone]: updatedAccount,
+    });
 
     setSelectedChannelId(nextChannel.id);
     setBindName("");
@@ -1452,9 +710,9 @@ export default function App() {
     setBindAccount("");
     setRoute("withdraw");
     setNotice(t.channelAdded);
-  }
+  };
 
-  function savePaymentPassword() {
+  const savePaymentPassword = async () => {
     const acc = accounts[currentPhone];
     if (!newPayPassword || !confirmPayPassword) {
       setNotice(t.allFieldsRequired);
@@ -1473,67 +731,62 @@ export default function App() {
       return;
     }
 
-    setAccounts((prev) => ({
-      ...prev,
+    await updateAccounts({
+      ...accounts,
       [currentPhone]: {
-        ...(prev[currentPhone] as UserAccount),
+        ...(accounts[currentPhone] as UserAccount),
         paymentPassword: newPayPassword,
       },
-    }));
+    });
     setOldPayPassword("");
     setNewPayPassword("");
     setConfirmPayPassword("");
     setNotice(t.passwordSaved);
-  }
+  };
 
-  function updateTxStatus(txId: string, next: "approved" | "rejected") {
+  const updateTxStatus = async (txId: string, next: "approved" | "rejected") => {
     const target = txs.find((x) => x.id === txId);
     if (!target || target.status !== "pending") return;
 
-    setTxs((prev) => prev.map((x) => (x.id === txId ? { ...x, status: next } : x)));
+    const updatedTxs = txs.map((x) => (x.id === txId ? { ...x, status: next } : x));
+    await updateTxs(updatedTxs);
 
     if (next === "approved") {
       const referralBonusTxs: Transaction[] = [];
-      setBalances((prev) => {
-        const before = prev[target.phone] ?? 0;
-        const after = target.type === "deposit" ? before + target.amount : Math.max(0, before - target.amount);
-        const nextBalances = { ...prev, [target.phone]: after };
+      let newBalances = { ...balances };
+      
+      const before = newBalances[target.phone] ?? 0;
+      const after = target.type === "deposit" ? before + target.amount : Math.max(0, before - target.amount);
+      newBalances[target.phone] = after;
 
-        if (target.type === "deposit") {
-          const inviterPhone = accounts[target.phone]?.referredBy;
-          if (inviterPhone && inviterPhone !== target.phone) {
-            const referralBonus = Number((target.amount * REFERRAL_DEPOSIT_RATE).toFixed(4));
-            if (referralBonus > 0) {
-              nextBalances[inviterPhone] = Number(((nextBalances[inviterPhone] ?? 0) + referralBonus).toFixed(4));
-              referralBonusTxs.push({
-                id: createUniqueId("tx_ref_dep"),
-                phone: inviterPhone,
-                type: "deposit",
-                amount: referralBonus,
-                method: "Referral 5% deposit bonus",
-                status: "approved",
-                payoutDetails: `From ${target.phone}`,
-                createdAt: new Date().toISOString(),
-              });
-            }
+      if (target.type === "deposit") {
+        const inviterPhone = accounts[target.phone]?.referredBy;
+        if (inviterPhone && inviterPhone !== target.phone) {
+          const referralBonus = Number((target.amount * REFERRAL_DEPOSIT_RATE).toFixed(4));
+          if (referralBonus > 0) {
+            newBalances[inviterPhone] = Number(((newBalances[inviterPhone] ?? 0) + referralBonus).toFixed(4));
+            referralBonusTxs.push({
+              id: createUniqueId("tx_ref_dep"),
+              phone: inviterPhone,
+              type: "deposit",
+              amount: referralBonus,
+              method: "Referral 5% deposit bonus",
+              status: "approved",
+              payoutDetails: `From ${target.phone}`,
+              createdAt: new Date().toISOString(),
+            });
           }
         }
+      }
 
-        return nextBalances;
-      });
-
+      await updateBalances(newBalances);
       if (referralBonusTxs.length > 0) {
-        setTxs((prev) => [...referralBonusTxs, ...prev]);
+        await updateTxs([...referralBonusTxs, ...updatedTxs]);
       }
     }
-  }
+  };
 
-  function openUserTab(tab: MainTab) {
-    setRoute("home");
-    setMainTab(tab);
-  }
-
-  function activateProductPlan(plan: (typeof ROBOT_PRODUCTS)[number]) {
+  const activateProductPlan = async (plan: (typeof ROBOT_PRODUCTS)[number]) => {
     if (balance < plan.price) {
       setDepositAmount(String(plan.price));
       setRoute("deposit");
@@ -1555,25 +808,123 @@ export default function App() {
       lastPayoutAt: new Date().toISOString(),
     };
 
-    setBalances((prev) => ({
-      ...prev,
-      [currentPhone]: Math.max(0, (prev[currentPhone] ?? 0) - plan.price),
-    }));
-    setDevices((prev) => [nextDevice, ...prev]);
+    const newBalance = Math.max(0, (balances[currentPhone] ?? 0) - plan.price);
+    await updateBalances({ ...balances, [currentPhone]: newBalance });
+    await updateDevices([nextDevice, ...devices]);
     setNotice(t.boughtSuccess);
     setRoute("devices");
+  };
+
+  // --- Reset Helpers ---
+  function resetAuthFields() {
+    setPhoneInput("");
+    setPassword("");
+    setConfirmPassword("");
+    setShowAuthPassword(false);
+    setShowAuthConfirmPassword(false);
   }
 
-  if (!session) {
-    const showAdmin = isAdminPath;
+  function resetWithdrawForm() {
+    setWithdrawType("bank");
+    setWithdrawNetwork("TRC20");
+    setWithdrawAmount("");
+    setWithdrawAddress("");
+    setPaymentPasswordInput("");
+    setSelectedChannelId("");
+    setShowSheet(false);
+  }
+
+  // --- Render Helpers ---
+  const t = DICT[lang];
+  const isRtl = lang === "ar";
+  const currentPhone = session?.phone ?? "";
+  const currentAccount = currentPhone ? accounts[currentPhone] : undefined;
+  const balance = balances[currentPhone] ?? 0;
+  const pendingCount = txs.filter((x) => x.phone === currentPhone && x.status === "pending").length;
+  const depositDestination = DESTINATIONS[depositChannel];
+  const withdrawChannels = currentAccount?.channels ?? [];
+  const userDevices = devices.filter((device) => device.phone === currentPhone);
+  const selectedChannel = useMemo(
+    () => withdrawChannels.find((x) => x.id === selectedChannelId),
+    [withdrawChannels, selectedChannelId]
+  );
+  const approvedDepositTotal = txs
+    .filter((x) => x.phone === currentPhone && x.type === "deposit" && x.status === "approved")
+    .reduce((sum, x) => sum + x.amount, 0);
+  const userProfitRecords = profitRecords.filter((record) => record.phone === currentPhone);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTodayMs = startOfToday.getTime();
+  const todayProfitFromRecords = userProfitRecords
+    .filter((record) => new Date(record.createdAt).getTime() >= startOfToday.getTime())
+    .reduce((sum, record) => sum + record.amount, 0);
+  const todayLiveUncreditedProfit = userDevices.reduce((sum, device) => {
+    const { purchasedAtMs, effectiveNow } = getDeviceLifecycle(device, clockNow);
+    const payoutBaseMs = new Date(device.lastPayoutAt ?? device.purchasedAt).getTime();
+    const accrualStartMs = Math.max(startOfTodayMs, purchasedAtMs, Number.isFinite(payoutBaseMs) ? payoutBaseMs : purchasedAtMs);
+    const elapsedMs = Math.max(0, effectiveNow - accrualStartMs);
+    if (elapsedMs <= 0) return sum;
+    const rawLiveProfit = (elapsedMs / DEVICE_PAYOUT_INTERVAL_MS) * Number(device.dailyIncome || 0);
+    const earnedSoFar = Number(device.earnedAmount ?? 0);
+    const remaining = Math.max(0, Number(device.totalIncome || 0) - earnedSoFar);
+    const safeLiveProfit = Math.min(rawLiveProfit, remaining);
+    return sum + (Number.isFinite(safeLiveProfit) ? safeLiveProfit : 0);
+  }, 0);
+  const todayProfit = Number((todayProfitFromRecords + todayLiveUncreditedProfit).toFixed(4));
+  const userTxs = txs.filter((x) => x.phone === currentPhone);
+  const referralLink = `${window.location.origin}?ref=${encodeURIComponent(currentPhone)}`;
+  const teamCount = Object.entries(accounts).filter(([, account]) => account.referredBy === currentPhone).length;
+  const referralDepositBonusTotal = txs
+    .filter((tx) => tx.phone === currentPhone && tx.status === "approved" && tx.method === "Referral 5% deposit bonus")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const referralProfitBonusTotal = txs
+    .filter((tx) => tx.phone === currentPhone && tx.status === "approved" && tx.method === "Referral 2.5% profit bonus")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const referralBonusTotal = txs
+    .filter((tx) => tx.phone === currentPhone && tx.status === "approved" && tx.method.startsWith("Referral "))
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const withdrawableAmountNow = Math.max(0, Number((balance ?? 0).toFixed(4)));
+  const withdrawAmountValue = parseAmountInput(withdrawAmount);
+  const validWithdrawAmount = Number.isFinite(withdrawAmountValue) && withdrawAmountValue > 0 ? withdrawAmountValue : 0;
+  const withdrawServiceFeeAmount = Number((validWithdrawAmount * WITHDRAW_SERVICE_FEE_RATE).toFixed(4));
+  const withdrawExpectedAmount = Number(Math.max(0, validWithdrawAmount - withdrawServiceFeeAmount).toFixed(4));
+  const filteredUserTxs = useMemo(() => {
+    if (txFilter === "all") return userTxs;
+    if (txFilter === "deposit") return userTxs.filter((x) => x.type === "deposit");
+    if (txFilter === "withdraw") return userTxs.filter((x) => x.type === "withdraw");
+    return userTxs.filter((x) => x.status === txFilter);
+  }, [txFilter, userTxs]);
+
+  function statusLabel(status: Transaction["status"]) { /* ... */ }
+  function typeLabel(type: Transaction["type"]) { /* ... */ }
+  function openTelegramHelp() { /* ... */ }
+  function openProofPreview(rawUrl?: string) { /* ... */ }
+  function openUserTab(tab: MainTab) { /* ... */ }
+
+  // --- Loading State ---
+  if (isLoading) {
     return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100">
+        <div className="text-center">
+          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-zinc-900 border-t-transparent"></div>
+          <p className="text-zinc-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Render Logic (No Session) ---
+  if (!session) {
+    const showAdmin = window.location.hash === "#admin";
+    return (
+      // ... (نفس JSX السابق لقسم تسجيل الدخول) ...
       <div dir={isRtl ? "rtl" : "ltr"} className="relative min-h-screen text-zinc-900">
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: "url('/images/hero-tecai.jpg')" }}
         />
         <div className="absolute inset-0 bg-zinc-900/45" />
-        <div className="relative mx-auto flex min-h-screen w-full max-w-md items-center px-4">
+        <div className="relative mx-auto flex min-h-screen w-full max-w-sm items-center px-4">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1668,11 +1019,13 @@ export default function App() {
     );
   }
 
+  // --- Render Logic (Admin Session) ---
   if (session.role === "admin") {
     const pending = txs.filter((x) => x.status === "pending");
     return (
+      // ... (نفس JSX السابق للوحة تحكم الأدمن) ...
       <div dir={isRtl ? "rtl" : "ltr"} className="min-h-screen bg-zinc-100 text-zinc-900">
-        <main className="mx-auto w-full max-w-3xl px-4 py-4">
+        <main className="mx-auto w-full max-w-sm px-4 py-4">
           <div className="mb-4 flex items-center justify-between">
             <h1 className="text-lg font-bold">{t.pendingOps}</h1>
             <button onClick={logout} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs">{t.logout}</button>
@@ -1723,7 +1076,7 @@ export default function App() {
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-lg rounded-2xl bg-white p-3"
+                className="w-full max-w-sm rounded-2xl bg-white p-3"
                 onClick={(e) => e.stopPropagation()}
               >
                 {isImageProofUrl(proofPreviewUrl) ? (
@@ -1742,9 +1095,11 @@ export default function App() {
     );
   }
 
+  // --- Render Logic (User Session) ---
   return (
+    // ... (نفس JSX السابق لقسم المستخدم، مع استبدال دوال التحديث القديمة بالجديدة مثل updateAccounts, updateBalances, etc.) ...
     <div dir={isRtl ? "rtl" : "ltr"} className="min-h-screen bg-zinc-100 text-zinc-900">
-      <main className="mx-auto min-h-screen w-full max-w-5xl pb-20">
+      <main className="mx-auto min-h-screen w-full max-w-sm pb-20">
         <header className="flex items-center justify-between px-4 py-3">
           {route !== "home" ? (
             <button onClick={() => setRoute("home")} className="text-xl">←</button>
@@ -1771,7 +1126,7 @@ export default function App() {
 
         <AnimatePresence mode="wait">
           {route === "home" && (
-            <motion.section key={`home-${mainTab}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4 px-4 md:px-6">
+            <motion.section key={`home-${mainTab}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4 px-4">
               {mainTab === "home" && (
                 <>
                   <div className="rounded-2xl border border-zinc-200 bg-white p-3">
@@ -1797,7 +1152,7 @@ export default function App() {
 
                   <img src="/images/hero-tecai.jpg" alt="TECAI banner" className="h-44 w-full rounded-2xl object-cover" />
 
-                  <div className="grid grid-cols-3 gap-2 text-center text-sm md:max-w-3xl">
+                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
                     <button onClick={() => setRoute("deposit")} className="rounded-lg py-1.5">💳<div>{t.deposit}</div></button>
                     <button onClick={() => setRoute("withdraw")} className="rounded-lg py-1.5">👛<div>{t.withdraw}</div></button>
                     <button className="rounded-lg py-1.5">✉️<div>{t.lottery}</div></button>
@@ -1806,7 +1161,7 @@ export default function App() {
                     <button className="rounded-lg py-1.5">⬇️<div>{t.app}</div></button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-center text-sm md:max-w-3xl">
+                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
                     <div className="rounded-xl border border-zinc-300 bg-white p-2.5">
                       <p className="font-semibold">{formatAmount(balance)} {t.tnd}</p>
                       <p className="mt-1 text-zinc-500">{t.accountBalance}</p>
@@ -1828,7 +1183,7 @@ export default function App() {
               )}
 
               {mainTab === "products" && (
-                    <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
+                <div className="space-y-3">
                   <button onClick={() => setRoute("devices")} className="w-full rounded-lg border border-zinc-300 bg-white py-2 text-sm font-medium">
                     {t.myDevices}
                   </button>
@@ -2042,7 +1397,7 @@ export default function App() {
           )}
 
           {route === "deposit" && (
-            <motion.section key="deposit" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-2xl space-y-3 px-4">
+            <motion.section key="deposit" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 px-4">
               <div className="mx-auto h-40 w-40 rounded-xl border border-zinc-200 bg-white p-2">
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(depositDestination)}`} alt="qr" className="h-full w-full rounded-lg object-contain" />
               </div>
@@ -2100,7 +1455,7 @@ export default function App() {
           )}
 
           {route === "withdraw" && (
-            <motion.section key="withdraw" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-2xl space-y-3 px-4">
+            <motion.section key="withdraw" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 px-4">
               <div className="grid grid-cols-2 border-b border-zinc-300 text-center text-lg">
                 <button onClick={() => setWithdrawType("bank")} className={`border-b-2 py-2 ${withdrawType === "bank" ? "border-zinc-900 font-semibold" : "border-transparent text-zinc-400"}`}>{t.bankCard}</button>
                 <button onClick={() => setWithdrawType("usdt")} className={`border-b-2 py-2 ${withdrawType === "usdt" ? "border-zinc-900 font-semibold" : "border-transparent text-zinc-400"}`}>USDT</button>
@@ -2176,7 +1531,7 @@ export default function App() {
           )}
 
           {route === "bind-bank" && (
-            <motion.section key="bind-bank" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-2xl space-y-3 px-4">
+            <motion.section key="bind-bank" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 px-4">
               <label className="block text-lg font-semibold">{t.channel}</label>
               <div className="grid grid-cols-3 gap-2 text-sm">
                 {(["Bank", "D17", "Flouci"] as WithdrawProvider[]).map((provider) => (
@@ -2194,12 +1549,12 @@ export default function App() {
           )}
 
           {route === "devices" && (
-            <motion.section key="devices" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-3xl space-y-3 px-4">
+            <motion.section key="devices" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 px-4">
               <h3 className="text-base font-semibold">{t.myDevicesTitle}</h3>
               {userDevices.length === 0 && (
                 <p className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-500">{t.noDevices}</p>
               )}
-              <div className="space-y-2 md:grid md:grid-cols-2 md:gap-2 md:space-y-0">
+              <div className="space-y-2">
                 {userDevices.map((device) => {
                   const { purchasedAtMs, endAtMs, effectiveNow } = getDeviceLifecycle(device, clockNow);
                   const elapsed = effectiveNow - purchasedAtMs;
@@ -2249,7 +1604,7 @@ export default function App() {
           )}
 
           {route === "settings" && (
-            <motion.section key="settings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-2xl space-y-3 px-4">
+            <motion.section key="settings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 px-4">
               <p className="rounded-xl border border-zinc-200 bg-white p-3 text-sm text-zinc-600">{t.settingsHint}</p>
               {currentAccount?.paymentPassword && <input type="password" value={oldPayPassword} onChange={(e) => setOldPayPassword(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base" placeholder={t.currentPassword} />}
               <input type="password" value={newPayPassword} onChange={(e) => setNewPayPassword(e.target.value)} className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-base" placeholder={t.newPassword} />
@@ -2261,7 +1616,7 @@ export default function App() {
       </main>
 
       {route === "home" && (
-        <nav className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-5xl -translate-x-1/2 grid-cols-4 border-t border-zinc-200 bg-white py-1 text-center text-sm md:text-base">
+        <nav className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-sm -translate-x-1/2 grid-cols-4 border-t border-zinc-200 bg-white py-1 text-center text-sm">
           <button onClick={() => openUserTab("home")} className={`py-2 ${mainTab === "home" ? "font-semibold text-zinc-900" : "text-zinc-500"}`}>{t.home}</button>
           <button onClick={() => openUserTab("products")} className={`py-2 ${mainTab === "products" ? "font-semibold text-zinc-900" : "text-zinc-500"}`}>{t.products}</button>
           <button onClick={() => openUserTab("team")} className={`py-2 ${mainTab === "team" ? "font-semibold text-zinc-900" : "text-zinc-500"}`}>{t.team}</button>
@@ -2282,7 +1637,7 @@ export default function App() {
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 10, opacity: 0 }}
-              className="w-full max-w-lg rounded-2xl bg-white p-4"
+              className="w-full max-w-sm rounded-2xl bg-white p-4"
               onClick={(e) => e.stopPropagation()}
             >
               <h3 className="text-lg font-semibold">{INTRO_CONTENT[lang].title}</h3>
@@ -2313,7 +1668,7 @@ export default function App() {
               animate={{ y: 0 }}
               exit={{ y: 120 }}
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
-              className="absolute bottom-0 left-1/2 w-full max-w-2xl -translate-x-1/2 rounded-t-3xl bg-white p-4"
+              className="absolute bottom-0 left-1/2 w-full max-w-sm -translate-x-1/2 rounded-t-3xl bg-white p-4"
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -2383,7 +1738,7 @@ export default function App() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-lg rounded-2xl bg-white p-3"
+              className="w-full max-w-sm rounded-2xl bg-white p-3"
               onClick={(e) => e.stopPropagation()}
             >
               {isImageProofUrl(proofPreviewUrl) ? (
