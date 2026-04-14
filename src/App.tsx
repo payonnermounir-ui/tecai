@@ -893,7 +893,25 @@ export default function App() {
   const [lang, setLang] = useState<Lang>(() => loadJson<Lang>("tecai:lang", "ar"));
   const [session, setSession] = useState<Session>(() => loadJson<Session>("tecai:session", null));
   const [accounts, setAccounts] = useState<Record<string, UserAccount>>(() => loadJson("tecai:accounts", {}));
-  const [balances, setBalances] = useState<Record<string, number>>(() => loadJson("tecai:balances", {}));
+ 
+const [balances, setBalances] = useState<Record<string, number>>(() => loadJson("tecai:balances", {}));
+ // جلب الرصيد من Supabase عند تحميل الصفحة
+useEffect(() => {
+  if (session?.role === "user" && session.phone && supabase) {
+    const fetchBalance = async () => {
+      const { data, error } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('phone', session.phone)
+        .single();
+      
+      if (data && !error) {
+        setBalances(prev => ({ ...prev, [session.phone]: data.balance }));
+      }
+    };
+    fetchBalance();
+  }
+}, [session]);
   const [txs, setTxs] = useState<Transaction[]>(() => loadJson("tecai:txs", []));
   const [devices, setDevices] = useState<OwnedDevice[]>(() => loadJson("tecai:devices", []));
   const [profitRecords, setProfitRecords] = useState<ProfitRecord[]>(() => loadJson("tecai:profit-records", []));
