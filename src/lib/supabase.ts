@@ -1,14 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
-const const supabaseUrl = 'https://jfkgagorghxael.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impma2Fnb3JnbGh4YWVoemdyYXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NTA2MTUsImV4cCI6MjA5MTIyNjYxNX0.IqN5LRyRrYoDepRqoNzF7G64qSOIsbxFZXszCHhtAJ8';
+// استخدم المتغيرات من البيئة إذا كانت موجودة، وإلا استخدم القيم المباشرة
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://jfkgagorghxael.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impma2Fnb3JnbGh4YWVoemdyYXNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2NTA2MTUsImV4cCI6MjA5MTIyNjYxNX0.IqN5LRyRrYoDepRqoNzF7G64qSOIsbxFZXszCHhtAJ8';
 
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
-
-export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: false, // لا يحتفظ بتسجيل الدخول بعد تحديث الصفحة
-      },
-    })
-  : null;
