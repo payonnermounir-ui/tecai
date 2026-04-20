@@ -542,27 +542,23 @@ export default function App() {
 
     const normalizedOwner = normalizeEmail(emailValue);
 
-    const direct = await supabase
-      .from("users")
-      .select("email, created_at")
-      .eq("referred_by", normalizedOwner);
-
-    if (!direct.error && direct.data) {
-      const rows = (direct.data as Array<{ email: string; created_at?: string }>)
-        .map((row) => ({ email: normalizeEmail(row.email), created_at: row.created_at }));
-      setInvitedUsers(rows);
-      return;
-    }
-
     const { data, error } = await supabase
-      .from("users")
-      .select("email, created_at, referred_by")
-      .not("referred_by", "is", null);
+  .from("users")
+  .select("email, created_at")
+  .eq("referred_by", normalizedOwner);
 
-    if (error || !data) {
-      setInvitedUsers([]);
-      return;
-    }
+if (error || !data) {
+  setInvitedUsers([]);
+  return;
+}
+
+const rows = (data as Array<{ email: string; created_at?: string }>)
+  .map((row) => ({
+    email: normalizeEmail(row.email),
+    created_at: row.created_at,
+  }));
+
+setInvitedUsers(rows);
 
     const rows = (data as Array<{ email: string; created_at?: string; referred_by?: string | null }>)
       .filter((row) => normalizeEmail(String(row.referred_by || "")) === normalizedOwner)
