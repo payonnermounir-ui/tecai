@@ -33,24 +33,24 @@ export async function createUser(email: string, passwordHash: string, referredBy
   const referralCode = generateReferralCode();
 
   const { data, error } = await supabase
-  .from('users')
-  .upsert(
-    {
-      id: createId('usr'),
-      email,
-      password_hash: passwordHash,
-      referred_by: referredBy || null,
-      referral_code: referralCode,
-    },
-    { onConflict: 'email' }
-  )
-  .select()
-  .maybeSingle();
+    .from('users')
+    .upsert(
+      {
+        id: createId('usr'),
+        email,
+        password_hash: passwordHash,
+        referred_by: referredBy || null,
+        referral_code: referralCode,
+      },
+      { onConflict: 'email' }
+    )
+    .select()
+    .maybeSingle();
 
-if (error) {
-  console.error('Create user error:', error.message);
-  return null;
-}
+  if (error) {
+    console.error('Create user error:', error.message);
+    return null;
+  }
 
   // ==================== REFERRAL SYSTEM ====================
   if (referredBy) {
@@ -132,7 +132,7 @@ export async function createTransaction(tx: any) {
 
   if (error) return false;
 
-  // 👇 الإحالة (فقط عند deposit ناجح)
+  // ==================== REFERRAL SYSTEM (FIXED) ====================
   if (tx.type === 'deposit' && tx.status === 'completed') {
 
     const { data: user } = await supabase
@@ -145,24 +145,22 @@ export async function createTransaction(tx: any) {
 
       const bonus = Number(tx.amount) * 0.05;
 
-      const { data: balance } = await supabase
-        .from('balances')
-        .select('amount')
-        .eq('email', user.referred_by)
+      // 🔥 FIX: جلب المحيل عبر referral_code
+      const { data: referrer } = await supabase
+        .from('users')
+        .select('email')
+        .eq('referral_code', user.referred_by)
         .single();
 
-      if (balance) {
-        await supabase
-          .from('balances')
-          .update({
-            amount: Number(balance.amount) + bonus
-          })
-          .eq('email', user.referred_by);
-      }
+      if (!referrer?.email) return true;
 
+      // تحديث الرصيد عبر النظام الموحد
+      await addBalance(referrer.email, bonus);
+
+      // تسجيل الإحالة
       await supabase.from('referrals').insert({
         user_email: tx.email,
-        referrer_email: user.referred_by,
+        referrer_email: referrer.email,
         bonus: bonus
       });
     }
@@ -175,7 +173,6 @@ export async function createTransaction(tx: any) {
 export async function updateTransactionStatus(id: string, status: string) {
   if (!isSupabaseConfigured || !supabase) return false;
 
-  // 1. جلب العملية
   const { data: tx } = await supabase
     .from('transactions')
     .select('*')
@@ -184,7 +181,6 @@ export async function updateTransactionStatus(id: string, status: string) {
 
   if (!tx) return false;
 
-  // 2. تحديث الحالة
   const { error } = await supabase
     .from('transactions')
     .update({ status })
@@ -192,12 +188,11 @@ export async function updateTransactionStatus(id: string, status: string) {
 
   if (error) return false;
 
-  // 3. عند قبول الإيداع → إضافة الرصيد + إجمالي الإيداع
   if (status === 'approved' && tx.type === 'deposit') {
     const current = await getBalance(tx.email);
 
-    const newBalance = (current?.balance || 0) + tx.amount;
-    const newDeposit = (current?.total_deposit || 0) + tx.amount;
+    const newBalance = (current?.balance || 0) + Number(tx.amount);
+    const newDeposit = (current?.total_deposit || 0) + Number(tx.amount);
 
     await updateBalance(tx.email, newBalance, newDeposit);
   }
