@@ -133,7 +133,7 @@ export async function createTransaction(tx: any) {
   if (error) return false;
 
   // ==================== REFERRAL SYSTEM (FIXED) ====================
-  if (tx.type === 'deposit' && tx.status === 'completed') {
+  if (tx.type === 'deposit' && tx.status === 'approved') {
 
     const { data: user } = await supabase
       .from('users')
